@@ -47,6 +47,7 @@ import {
 import { openSpecViewer } from "./spec-viewer.ts";
 import { openTriageView } from "./triage.ts";
 import { detectDisagreement, formatDisagreementReport, selectSecondaryModel } from "./disagree.ts";
+import { detectPromptOverrides } from "./prompt-integrity.ts";
 
 const WHY_TEXT = `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you have to form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities, but it must not resolve them for you.`;
 
@@ -228,8 +229,13 @@ export default function ruta(pi: ExtensionAPI) {
   pi.on("before_agent_start", async (event, ctx) => {
     const state = await loadProjectState(ctx.cwd);
     if (!state) return;
+    const rutaFragment = composeSystemPrompt(modePrompt(state.current_mode));
+    const overrides = detectPromptOverrides(event.systemPrompt, rutaFragment);
+    if (overrides.length > 0) {
+      ctx.ui.notify(`Prompt override pattern detected from an external source: "${overrides[0]}". ruta restrictions may be at risk.`, "warning");
+    }
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${composeSystemPrompt(modePrompt(state.current_mode))}`,
+      systemPrompt: `${event.systemPrompt}\n\n${rutaFragment}`,
     };
   });
 
