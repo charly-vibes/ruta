@@ -19,11 +19,25 @@ test('findSpecLineForSection returns the matching heading line', () => {
   assert.equal(findSpecLineForSection(spec, 'non-goals'), 5);
 });
 
-test('findSpecLineForSection falls back to line 1 when the section is missing', () => {
+test('findSpecLineForSection returns null when the section is missing', () => {
   const spec = ['# Intro', 'opening'].join('\n');
 
-  assert.equal(findSpecLineForSection(spec, 'missing'), 1);
+  assert.equal(findSpecLineForSection(spec, 'missing'), null);
   assert.equal(findSpecLineForSection(spec), 1);
+});
+
+test('findSpecLineForSection returns null for ambiguous query matching multiple headings', () => {
+  const spec = [
+    '# Goals',
+    'goal text',
+    '## Non-goals',
+    'out of scope',
+  ].join('\n');
+
+  // 'goal' is a substring of both 'Goals' and 'Non-goals' — ambiguous
+  assert.equal(findSpecLineForSection(spec, 'goal'), null);
+  // Exact match is unambiguous even when substring hits multiple
+  assert.equal(findSpecLineForSection(spec, 'Goals'), 1);
 });
 
 test('makeSpecViewerFrame includes line numbers and cursor marker', () => {

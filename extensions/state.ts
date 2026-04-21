@@ -469,20 +469,33 @@ function deriveExcerptForLine(lines: string[], lineNumber: number): string {
   return chosen.replace(/\s+/g, " ").slice(0, 160);
 }
 
-export async function getSpecSectionByRef(specPath: string, sectionRef: string): Promise<string> {
-  const text = await readText(specPath);
-  const trimmed = sectionRef.trim();
-  const headingPattern = new RegExp(`^(#{1,6})\\s+.*${escapeRegExp(trimmed)}.*$`, "mi");
-  const headingMatch = text.match(headingPattern);
-  if (!headingMatch || headingMatch.index === undefined) {
-    return text;
-  }
-  const start = headingMatch.index;
-  const level = headingMatch[1].length;
-  const tail = text.slice(start);
-  const nextHeading = tail.slice(headingMatch[0].length).match(new RegExp(`\\n#{1,${level}}\\s+`, "m"));
-  const end = nextHeading && nextHeading.index !== undefined ? start + headingMatch[0].length + nextHeading.index : text.length;
+function extractSectionFromText(text: string, headingLine: string): string {
+  const start = text.indexOf(headingLine);
+  if (start === -1) return text;
+  const levelMatch = headingLine.match(/^(#{1,6})/);
+  const level = levelMatch ? levelMatch[1].length : 1;
+  const tail = text.slice(start + headingLine.length);
+  const nextHeading = tail.match(new RegExp(`\n#{1,${level}}\\s+`, "m"));
+  const end = nextHeading && nextHeading.index !== undefined ? start + headingLine.length + nextHeading.index : text.length;
   return text.slice(start, end).trim();
+}
+
+export async function getSpecSectionByRef(specPath: string, sectionRef: string): Promise<string | null> {
+  const text = await readText(specPath);
+  const query = sectionRef.trim().toLowerCase();
+
+  const headingLines: string[] = [];
+  for (const line of text.split("\n")) {
+    if (/^#{1,6}\s+/.test(line)) headingLines.push(line);
+  }
+
+  const exact = headingLines.filter((l) => l.replace(/^#{1,6}\s+/, "").trim().toLowerCase() === query);
+  if (exact.length > 0) return extractSectionFromText(text, exact[0]!);
+
+  const partial = headingLines.filter((l) => l.replace(/^#{1,6}\s+/, "").trim().toLowerCase().includes(query));
+  if (partial.length === 1) return extractSectionFromText(text, partial[0]!);
+
+  return null;
 }
 
 export function escapeRegExp(input: string): string {

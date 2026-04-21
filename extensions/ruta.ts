@@ -164,6 +164,9 @@ export default function ruta(pi: ExtensionAPI) {
     if (!state) throw new Error("No ruta project loaded");
     const specPath = path.join(cwd, state.spec_path);
     const sectionText = await getSpecSectionByRef(specPath, sectionRef);
+    if (sectionText === null) {
+      throw new Error(`Section not found or ambiguous: "${sectionRef}". Use an exact heading name.`);
+    }
     const prompt = REIMPL_GAP_PROBE_PROMPT.replace("{section_text}", sectionText);
     return runCompletion(ctx, prompt);
   }

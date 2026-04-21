@@ -4,6 +4,7 @@ import { canonicalizeSpec } from './test-helpers';
 import {
   appendSpecComment,
   deriveSpecCommentAnchor,
+  getSpecSectionByRef,
   glossaryGateSatisfied,
   readGateSatisfied,
   readSpecComments,
@@ -130,6 +131,32 @@ test('appendSpecComment preserves existing comments', async () => {
     (await readSpecComments(commentsPath)).map((comment) => comment.id),
     ['c-1', 'c-2'],
   );
+});
+
+test('getSpecSectionByRef returns null when section is missing', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-section-ref-'));
+  const specPath = path.join(dir, 'spec.md');
+  await writeFile(specPath, '# Goals\n\nGoal text.\n\n# Implementation\n\nImpl text.\n', 'utf8');
+  assert.equal(await getSpecSectionByRef(specPath, 'NonExistent'), null);
+});
+
+test('getSpecSectionByRef returns null for ambiguous query', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-section-ambiguous-'));
+  const specPath = path.join(dir, 'spec.md');
+  await writeFile(specPath, '# Goals\n\nGoal text.\n\n## Non-goals\n\nNon-goal text.\n', 'utf8');
+  // 'goal' is a substring of both 'Goals' and 'Non-goals'
+  assert.equal(await getSpecSectionByRef(specPath, 'goal'), null);
+});
+
+test('getSpecSectionByRef returns the section text on exact match', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-section-exact-'));
+  const specPath = path.join(dir, 'spec.md');
+  // Same-level headings: Goals section stops at Implementation
+  await writeFile(specPath, '# Goals\n\nGoal text.\n\n# Implementation\n\nImpl text.\n', 'utf8');
+  const result = await getSpecSectionByRef(specPath, 'Goals');
+  assert.ok(result !== null);
+  assert.ok(result!.includes('Goal text.'));
+  assert.ok(!result!.includes('Impl text.'));
 });
 
 test('deriveSpecCommentAnchor returns excerpt and best-effort section label', () => {

@@ -2,18 +2,25 @@ import path from "node:path";
 import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 import { readText, type RutaProjectState } from "./state.ts";
 
-export function findSpecLineForSection(specText: string, section?: string): number {
+export function findSpecLineForSection(specText: string, section?: string): number | null {
   const query = section?.trim().toLowerCase();
   if (!query) return 1;
 
   const lines = splitSpecLines(specText);
+  const headings: Array<{ line: number; heading: string }> = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!.trim();
     if (!line.startsWith("#")) continue;
-    const heading = line.replace(/^#{1,6}\s+/, "").trim().toLowerCase();
-    if (heading.includes(query)) return index + 1;
+    headings.push({ line: index + 1, heading: line.replace(/^#{1,6}\s+/, "").trim().toLowerCase() });
   }
-  return 1;
+
+  const exact = headings.filter((h) => h.heading === query);
+  if (exact.length > 0) return exact[0]!.line;
+
+  const partial = headings.filter((h) => h.heading.includes(query));
+  if (partial.length === 1) return partial[0]!.line;
+
+  return null;
 }
 
 export function makeSpecViewerFrame(
@@ -140,7 +147,12 @@ export async function openSpecViewer(
 ): Promise<void> {
   const specPath = path.join(cwd, state.spec_path);
   const specText = await readText(specPath);
-  const initialLine = findSpecLineForSection(specText, section);
+  const resolved = findSpecLineForSection(specText, section);
+  if (section && resolved === null) {
+    ctx.ui.notify(`Section not found or ambiguous: "${section}". Use an exact heading name.`, "warning");
+    return;
+  }
+  const initialLine = resolved ?? 1;
   await ctx.ui.custom((tui: any, theme: any, _keybindings: any, done: (value: undefined) => void) => (
     new RutaSpecViewer(tui, theme, `ruta spec viewer — ${state.spec_path}`, specText, initialLine, done)
   ));
