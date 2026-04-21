@@ -41,6 +41,7 @@ import {
   REIMPLEMENT_MODE_PROMPT,
   REIMPL_GAP_PROBE_PROMPT,
 } from "./prompts.ts";
+import { openSpecViewer } from "./spec-viewer.ts";
 
 interface TriageState {
   token: string;
@@ -537,6 +538,23 @@ export default function ruta(pi: ExtensionAPI) {
       await appendMarkdown(paths.gaps, `\n${edited.trim()}\n`);
       ctx.ui.notify("Added gap entry", "success");
       await refreshUi(ctx, ctx.cwd, state);
+    },
+  });
+
+  pi.registerCommand("ruta-open-spec", {
+    description: "Open the current spec in a read-only viewer",
+    handler: async (args, ctx) => {
+      const state = await loadStateOrNotify(ctx.cwd, ctx);
+      if (!state) return;
+      if (!ctx.hasUI) {
+        ctx.ui.notify("/ruta-open-spec requires interactive mode", "error");
+        return;
+      }
+      try {
+        await openSpecViewer(ctx, ctx.cwd, state, args.trim() || undefined);
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      }
     },
   });
 

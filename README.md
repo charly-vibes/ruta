@@ -54,6 +54,8 @@ Then inside pi:
 
 ```text
 /ruta-init ruta-spec-v0.2.md
+/ruta-open-spec
+/ruta-open-spec Goals
 /ruta-note ...
 /ruta-unity ...
 /ruta-done-reading
@@ -63,6 +65,18 @@ Then inside pi:
 /ruta-probe "Mode contract: reimplement"
 /ruta-add-gap
 ```
+
+## Viewer smoke test
+
+```text
+/ruta-init ruta-spec-v0.2.md
+/ruta-open-spec
+# use ↑↓, pgup/pgdn, home/end
+# press enter, esc, or q to close
+/ruta-open-spec Goals
+```
+
+The viewer is read-only in v1 and never writes into `spec/`.
 
 ## Notes
 

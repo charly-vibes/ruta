@@ -1,0 +1,1 @@
+Implemented Phase 2 spec viewer: added extensions/spec-viewer.ts with section jump resolution and a read-only custom TUI viewer, wired /ruta-open-spec in extensions/ruta.ts, added helper tests in test/spec-viewer.test.ts, and documented a smoke test in README.md.
