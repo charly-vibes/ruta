@@ -5,18 +5,48 @@ This project uses **wai** to track the *why* behind decisions — research,
 reasoning, and design choices that shaped the code. Run `wai status` first
 to orient yourself.
 
+Detected workflow tools:
+- **wai** — research, reasoning, and design decisions
+- **beads** — issue tracking (tasks, bugs, dependencies). CLI command: **`bd`** (not `beads`)
+
+> **CRITICAL**: Apply TDD and Tidy First throughout — not just when writing code:
+> - **Planning/task creation**: each ticket should map to a red→green→refactor cycle; refactoring tasks must be separate tickets from feature tasks.
+> - **Design**: define the test shape (inputs/outputs) before designing the implementation.
+> - **Implementation**: write the failing test first, then make it pass, then tidy in a separate commit.
+
+> **When beginning research or creating a ticket**: run `wai search "<topic>"` to check for existing patterns before writing new content.
+> **Ro5**: The Rule of 5 skill is installed. Run `/ro5` after key phase transitions — implement, research, design — for iterative quality review.
+
+## When to Use What
+
+| Need | Tool | Example |
+|------|------|---------|
+| Record reasoning/research | wai | `wai add research "findings"` |
+| Capture design decisions | wai | `wai add design "architecture choice"` |
+| Session context transfer | wai | `wai handoff create <project>` |
+| Track work items/bugs | `bd` | `bd create --title="..." --type=task` |
+| Find available work | `bd` | `bd ready` |
+| Manage dependencies | `bd` | `bd dep add <blocked> <blocker>` |
+
+Key distinction:
+- **wai** = *why* decisions were made (reasoning, context, handoffs)
+- **`bd`** (beads) = *what* needs to be done (concrete tasks, status tracking)
+
 ## Starting a Session
 
 1. Run `wai sync` to ensure all agent tools and skills are correctly projected.
 2. Run `wai status` to see active projects, current phase, and suggestions.
-3. Check the phase — it tells you what kind of work is expected:
+3. Run `bd ready` to find available work items.
+   Before claiming: read the relevant source files to confirm
+   the issue is not already implemented.
+4. Check the phase — it tells you what kind of work is expected:
    - **research** → gather information, explore options
    - **design** → make architectural decisions
    - **plan** → break work into tasks
    - **implement** → write code, guided by research/plans
    - **review** → validate against plans
    - **archive** → wrap up
-4. Read existing artifacts with `wai search "<topic>"` before starting new work.
+5. Read existing artifacts with `wai search "<topic>"` before starting new work.
 
 ## Capturing Work
 
@@ -39,6 +69,8 @@ Before saying "done", run this checklist:
 
 ```
 [ ] wai handoff create <project>   # capture context for next session
+[ ] bd close <id>                  # close completed issues; also close parent epic if last sub-task
+[ ] bd sync --from-main            # pull beads updates
 [ ] wai reflect                    # update CLAUDE.md with project patterns (every ~5 sessions)
 [ ] git add <files> && git commit  # commit code + handoff
 ```
@@ -82,6 +114,15 @@ wai pipeline start <n> --topic=<t>  # Start a run; set WAI_PIPELINE_RUN=<id>
 wai pipeline next             # Advance to next step
 ```
 
+### beads (CLI: `bd`)
+```bash
+bd ready                     # Available work
+bd show <id>                 # Issue details
+bd create --title="..."      # New issue
+bd update <id> --status=in_progress
+bd close <id>                # Complete work
+```
+
 ## Structure
 
 The `.wai/` directory organizes artifacts using the PARA method:
@@ -106,3 +147,4 @@ context before starting research or creating tickets.
 > **Before research or ticket creation**: always run `wai search "<topic>"` to
 > check for known patterns. Do not rediscover what is already documented.
 <!-- WAI:REFLECT:REF:END -->
+
