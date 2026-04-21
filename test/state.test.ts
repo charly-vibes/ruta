@@ -3,9 +3,11 @@ import test from 'node:test';
 import { canonicalizeSpec } from './test-helpers';
 import {
   appendSpecComment,
+  createTriageToken,
   deriveSpecCommentAnchor,
   getSpecSectionByRef,
   glossaryGateSatisfied,
+  isValidTriageToken,
   readGateSatisfied,
   readSpecComments,
   reimplementGateSatisfied,
@@ -157,6 +159,31 @@ test('getSpecSectionByRef returns the section text on exact match', async () => 
   assert.ok(result !== null);
   assert.ok(result!.includes('Goal text.'));
   assert.ok(!result!.includes('Impl text.'));
+});
+
+test('createTriageToken produces a non-empty token', () => {
+  const t = createTriageToken();
+  assert.ok(t.token.length > 0);
+  assert.ok(t.issuedAt > 0);
+});
+
+test('isValidTriageToken accepts the matching live token', () => {
+  const t = createTriageToken();
+  assert.equal(isValidTriageToken(t, t.token), true);
+});
+
+test('isValidTriageToken rejects wrong token string', () => {
+  const t = createTriageToken();
+  assert.equal(isValidTriageToken(t, 'wrong-token'), false);
+});
+
+test('isValidTriageToken rejects when no active triage (null state)', () => {
+  assert.equal(isValidTriageToken(null, 'any-token'), false);
+});
+
+test('isValidTriageToken rejects undefined candidate', () => {
+  const t = createTriageToken();
+  assert.equal(isValidTriageToken(t, undefined), false);
 });
 
 test('deriveSpecCommentAnchor returns excerpt and best-effort section label', () => {

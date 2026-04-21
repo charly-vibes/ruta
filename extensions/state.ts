@@ -501,3 +501,24 @@ export async function getSpecSectionByRef(specPath: string, sectionRef: string):
 export function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&");
 }
+
+// ---------------------------------------------------------------------------
+// Triage token — ephemeral session state for authorizing ruta_add_gap calls.
+// Not persisted to disk.
+// ---------------------------------------------------------------------------
+
+export interface TriageToken {
+  token: string;
+  issuedAt: number;
+}
+
+export function createTriageToken(): TriageToken {
+  return {
+    token: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    issuedAt: Date.now(),
+  };
+}
+
+export function isValidTriageToken(active: TriageToken | null, candidate: string | undefined): boolean {
+  return active !== null && candidate === active.token;
+}

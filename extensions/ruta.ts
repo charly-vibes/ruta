@@ -8,11 +8,13 @@ import {
   appendMarkdown,
   artifactPaths,
   canTransition,
+  createTriageToken,
   describeAccess,
   formatGapEntry,
   formatGlossaryEntry,
   getSpecSectionByRef,
   glossaryGateSatisfied,
+  isValidTriageToken,
   loadProjectState,
   modeFragment,
   nextGapIndex,
@@ -28,6 +30,7 @@ import {
   timestampPrefix,
   type RutaMode,
   type RutaProjectState,
+  type TriageToken,
   updateMode,
   verifySpecHash,
   writeText,
@@ -43,15 +46,10 @@ import {
 } from "./prompts.ts";
 import { openSpecViewer } from "./spec-viewer.ts";
 
-interface TriageState {
-  token: string;
-  issuedAt: number;
-}
-
 const WHY_TEXT = `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you have to form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities, but it must not resolve them for you.`;
 
 export default function ruta(pi: ExtensionAPI) {
-  let triageState: TriageState | null = null;
+  let triageState: TriageToken | null = null;
 
   async function loadStateOrNotify(cwd: string, ctx: { ui: { notify: (message: string, level: "info" | "warning" | "error" | "success") => void } }): Promise<RutaProjectState | null> {
     const state = await loadProjectState(cwd);
@@ -176,10 +174,7 @@ export default function ruta(pi: ExtensionAPI) {
   }
 
   function makeTriageToken(): string {
-    triageState = {
-      token: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-      issuedAt: Date.now(),
-    };
+    triageState = createTriageToken();
     return triageState.token;
   }
 
@@ -248,7 +243,7 @@ export default function ruta(pi: ExtensionAPI) {
     }
     if (event.toolName === "ruta_add_gap") {
       const token = (event.input as { triage_token?: string }).triage_token;
-      if (!triageState || token !== triageState.token) {
+      if (!isValidTriageToken(triageState, token)) {
         return {
           block: true,
           reason: "ruta_add_gap may only be used from the active triage flow.",
@@ -307,7 +302,7 @@ export default function ruta(pi: ExtensionAPI) {
       triage_token: Type.String(),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      if (!triageState || params.triage_token !== triageState.token) {
+      if (!isValidTriageToken(triageState, params.triage_token)) {
         throw new Error("ruta_add_gap requires a live triage token");
       }
       const paths = artifactPaths(ctx.cwd);
