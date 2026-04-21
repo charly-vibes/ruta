@@ -1,0 +1,178 @@
+#+title: ruta spec viewer and cursor-anchored comments plan
+#+date: 2026-04-21
+
+* Summary
+Implement an in-pi spec viewer for ruta and add cursor-anchored comments stored in a sidecar file under .ruta/, preserving the spec invariant that files under spec/ remain read-only after initialization.
+
+* Goals
+- Make the spec readable inside pi without requiring LLM access.
+- Let the user add a comment at the current cursor location while reading.
+- Persist comments outside spec/ in a durable, git-friendly format.
+- Keep the first increment small enough to verify interactively.
+
+* Non-goals
+- Writing comments back into the source spec.
+- Building a full VS Code clone in the first pass.
+- Solving resilient anchoring across arbitrary future spec rewrites beyond a pragmatic first-pass line-plus-excerpt anchor.
+- Multi-user live collaboration.
+
+* Constraints and design anchors
+- Spec invariant from ruta spec: spec/ is read-only after init.
+- Current implementation already centralizes project state and file helpers in extensions/state.ts.
+- pi supports a custom editor via ctx.ui.setEditorComponent(...), which is the correct place to implement cursor-aware keybindings and a reading-focused surface.
+- pi default keybindings already use ctrl+k for delete-to-line-end, so a VS Code-like chord must either override the editor or start with a safer temporary shortcut.
+
+* Proposed design
+** Viewer model
+- Add a ruta-specific custom editor/viewer that loads the current spec text into a read-mostly surface.
+- The viewer will support cursor movement, line numbers, and comment markers in a gutter.
+- In its first version, editing of the spec text is disabled; the component behaves as a navigator with comment commands.
+
+** Comment storage
+- Add a sidecar file at .ruta/comments.json.
+- Store comments as structured records with:
+  - id
+  - spec_path
+  - line
+  - section_ref if derivable
+  - excerpt
+  - text
+  - created_at
+  - updated_at optional
+- Keep the format append-friendly and easy to diff.
+
+** User entrypoints
+- /ruta-open-spec [section]
+  - open the spec viewer
+  - optionally jump near a section heading or textual section ref
+- /ruta-comments
+  - list comments for the current spec
+- In the viewer:
+  - v1 shortcut: alt+c to add comment at current line
+  - v2 shortcut: ctrl+k ctrl+c chord
+  - future: next/previous comment navigation
+
+** Why this shape
+- It respects the read-only spec invariant.
+- It gives the missing core reading affordance noted during manual testing.
+- It decouples the viewer and comments from LLM workflows, so read mode remains genuinely non-AI.
+
+* Phased implementation
+** Phase 1: sidecar comment model and file helpers
+*** Files
+- extensions/state.ts
+- test/state.test.ts
+
+*** Changes
+- Extend artifactPaths() with comments path under .ruta/.
+- Add types and helpers for comment records.
+- Add read/write/list helpers for comments.json.
+- Add anchor helper that derives section_ref and excerpt from a given line number.
+
+*** Tests first
+- round-trip comments.json read/write
+- comment append preserves existing comments
+- anchor helper returns stable excerpt and best-effort section label
+
+*** Verification
+- npm test passes.
+- initializing a project creates no comments file until first comment, or creates an empty file if we choose eager creation.
+
+** Phase 2: open-spec command and read-only viewer
+*** Files
+- extensions/ruta.ts
+- new file: extensions/spec-viewer.ts
+- README.md
+
+*** Changes
+- Add /ruta-open-spec [section].
+- Build a custom viewer component using pi custom editor APIs.
+- Render line numbers and current cursor line.
+- Load spec text from state.spec_path.
+- Add optional initial jump to requested section.
+- Keep editing disabled in the viewer for v1.
+
+*** Tests first
+- pure helper tests for section-to-line resolution.
+- if component-level tests are impractical, cover viewer data transforms and verify manual smoke-test steps in README.
+
+*** Verification
+- In pi, /ruta-open-spec opens the spec inside the app.
+- Cursor movement works.
+- No writes occur to spec/.
+
+** Phase 3: add cursor-anchored comments in viewer
+*** Files
+- extensions/spec-viewer.ts
+- extensions/ruta.ts
+- extensions/state.ts
+- test/state.test.ts
+
+*** Changes
+- Add v1 comment shortcut: alt+c.
+- On invocation, open ctx.ui.editor or ctx.ui.input for the comment body.
+- Persist comment to .ruta/comments.json with line, excerpt, and section_ref.
+- Re-render gutter markers after save.
+- Add /ruta-comments to inspect saved comments outside the viewer.
+
+*** Tests first
+- append comment at line N stores expected anchor metadata.
+- comments listing is ordered and filtered by spec path.
+
+*** Verification
+- Add comment from the viewer, close and reopen, marker remains.
+- Comments survive pi restart.
+- Read mode still blocks LLM input while allowing local comment operations.
+
+** Phase 4: chorded shortcuts and navigation polish
+*** Files
+- extensions/spec-viewer.ts
+- README.md
+- possibly docs or prompt/reference files
+
+*** Changes
+- Add a chord state machine for ctrl+k then ctrl+c.
+- Add next/previous comment navigation.
+- Add delete/edit operations for an existing comment.
+- Surface key hints in status/widget text.
+
+*** Tests first
+- chord timeout/reset behavior
+- navigation across multiple comments
+
+*** Verification
+- VS Code-like chord works without leaking to default ctrl+k deletion behavior inside the viewer.
+
+* Risks and mitigations
+** Risk: ctrl+k conflicts with default pi editor binding
+Mitigation: ship alt+c first, then implement chord handling inside the custom viewer where ruta owns input processing.
+
+** Risk: line-number anchors drift when the spec changes
+Mitigation: store excerpt and best-effort section_ref in addition to line number; keep v1 behavior explicit and documented.
+
+** Risk: custom editor complexity slows delivery
+Mitigation: split the viewer into testable pure helpers and a thin editor wrapper; land the data model first.
+
+* Acceptance criteria
+- A user can open the spec inside pi with /ruta-open-spec.
+- A user can add a comment at the current cursor location without invoking the LLM.
+- Comments are stored outside spec/ and survive reload/restart.
+- Read mode restrictions remain intact.
+- The implementation adds tests for the new state and anchoring helpers.
+
+* Suggested work breakdown into tickets
+1. Data model and persistence for spec comments.
+2. Read-only spec viewer command and custom editor.
+3. Inline comment creation and listing commands.
+4. Chorded shortcuts and comment navigation polish.
+
+* Manual smoke-test script
+1. pi -e .
+2. /ruta-init ruta-spec-v0.2.md
+3. /ruta-open-spec
+4. move the cursor to a known line
+5. use alt+c to add a comment
+6. close and reopen the viewer
+7. verify gutter marker and /ruta-comments output
+8. verify spec/ruta-spec-v0.2.md is unchanged
+

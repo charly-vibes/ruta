@@ -1,0 +1,8 @@
+[default]
+extend-ignore-re = [
+  "chavruta",
+  "kushyot",
+  "teirutz",
+  "Rozenblit",
+  "Keil"
+]

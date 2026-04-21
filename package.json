@@ -1,0 +1,28 @@
+{
+  "name": "pi-ruta",
+  "version": "0.1.0",
+  "description": "A pi package for disciplined spec immersion",
+  "type": "module",
+  "keywords": ["pi-package", "pi", "spec-reading", "extension"],
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "npx tsx --test test/**/*.test.ts",
+    "hash-prompts": "node scripts/update-prompts-version.mjs",
+    "check": "npm run test && npm run hash-prompts"
+  },
+  "pi": {
+    "extensions": ["./extensions/ruta.ts"],
+    "skills": ["./skills"],
+    "prompts": ["./prompts"],
+    "themes": ["./themes"]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*",
+    "@sinclair/typebox": "*"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4"
+  }
+}

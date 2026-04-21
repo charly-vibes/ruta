@@ -1,0 +1,1 @@
+Read ruta spec v0.2, pi package docs, and extension API docs. Implement v0 around read/glossary/reimplement with source-owned prompts, file-derived gates, canonicalized spec hashing, and package-local resources.

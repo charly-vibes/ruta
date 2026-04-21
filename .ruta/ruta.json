@@ -1,0 +1,21 @@
+{
+  "schema_version": "0.2",
+  "spec_path": "spec/ruta-spec-v0.2.md",
+  "spec_hash": "sha256:4fde24ff1a5570d60be09c49d799130f13ea90ea5ac3b6eef31b29065113625b",
+  "spec_hash_canonicalization": "nfc-lf-trim-v1",
+  "current_mode": "read",
+  "unity_sentence": null,
+  "mode_history": [
+    {
+      "mode": "read",
+      "entered_at": "2026-04-21T20:18:26.242Z"
+    }
+  ],
+  "gates": {
+    "read_unlocked": false,
+    "glossary_unlocked": false,
+    "reimplement_unlocked": false
+  },
+  "prompt_bundle_hash": "sha256:14b9a89050721ac5604eb05d08aea887dd58d71b84602867b4c10df2313921e0",
+  "disclosure_ack": true
+}

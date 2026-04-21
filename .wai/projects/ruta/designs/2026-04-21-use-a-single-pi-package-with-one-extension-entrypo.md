@@ -1,0 +1,1 @@
+Use a single pi package with one extension entrypoint and helper modules. Keep prompts in TypeScript, scaffold user artifacts as markdown, and approximate richer TUI flows with scratch editors where bespoke panes are not yet built.

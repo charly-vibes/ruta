@@ -1,0 +1,18 @@
+# ruta
+
+ruta is a pi package that turns pi into a disciplined harness for a seven-day spec-immersion protocol.
+
+Core constraints:
+- It must not summarize specs for the user.
+- It must not write the user's paraphrases, syntheses, or gap resolutions.
+- Its load-bearing anti-sycophancy prompts live in source, not editable markdown.
+- v0 covers read, glossary, and reimplement modes.
+
+Primary entrypoint:
+- `extensions/ruta.ts`
+
+Important support files:
+- `extensions/state.ts` — state, hashing, scaffolding, gate checks
+- `extensions/prompts.ts` — source-of-truth prompt constants
+- `skills/*/SKILL.md` — mode-specific reference skills
+- `themes/ruta.json` — subdued visual theme

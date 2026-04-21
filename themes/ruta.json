@@ -1,0 +1,13 @@
+{
+  "name": "ruta",
+  "comment": "Subdued reading-oriented theme",
+  "colors": {
+    "bg": "#101113",
+    "fg": "#d7d9dc",
+    "accent": "#8aa1b4",
+    "dim": "#7d838a",
+    "warning": "#c9a66b",
+    "error": "#c27b7b",
+    "success": "#8db28a"
+  }
+}
