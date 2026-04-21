@@ -335,11 +335,18 @@ export async function glossaryGateSatisfied(filePath: string): Promise<boolean> 
   return entries.some((entry) => stripMarkdownFormatting(entry.userParaphrase).length > 0);
 }
 
+export const NOTEBOOK_SCAFFOLD_PATTERN = /Things I don't know yet:/;
+
 export async function readGateSatisfied(notebookPath: string, unitySentence: string | null): Promise<boolean> {
   if (!unitySentence || !unitySentence.trim()) return false;
   if (!(await pathExists(notebookPath))) return false;
   const text = await readText(notebookPath);
-  return text.replace(/^#.*$/gm, "").trim().length > 0;
+  const userLines = text
+    .split("\n")
+    .filter((line) => !/^#/.test(line))
+    .filter((line) => !NOTEBOOK_SCAFFOLD_PATTERN.test(line))
+    .filter((line) => line.trim().length > 0);
+  return userLines.length > 0;
 }
 
 export async function readGapEntries(filePath: string): Promise<GapEntry[]> {
@@ -366,8 +373,16 @@ export function extractSimpleField(body: string, field: string): string {
   return match?.[1]?.trim() ?? "";
 }
 
-export async function reimplementGateSatisfied(specPath: string, gapsPath: string): Promise<boolean> {
-  const headings = await readMajorSectionHeadings(specPath);
+export function parseScopeHeadings(scope: string): string[] {
+  return scope.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+}
+
+export async function reimplementGateSatisfied(specPath: string, gapsPath: string, scope?: string): Promise<boolean> {
+  let headings = await readMajorSectionHeadings(specPath);
+  if (scope) {
+    const scopeList = parseScopeHeadings(scope);
+    headings = headings.filter((h) => scopeList.includes(h.toLowerCase()));
+  }
   const gaps = await readGapEntries(gapsPath);
   if (headings.length === 0) return gaps.length > 0;
   return gaps.length >= headings.length;

@@ -689,7 +689,7 @@ export default function ruta(pi: ExtensionAPI) {
       const state = await loadStateOrNotify(ctx.cwd, ctx);
       if (!state) return;
       const paths = artifactPaths(ctx.cwd);
-      const ok = await reimplementGateSatisfied(path.join(ctx.cwd, state.spec_path), paths.gaps);
+      const ok = await reimplementGateSatisfied(path.join(ctx.cwd, state.spec_path), paths.gaps, state.scope);
       const next = { ...state, gates: { ...state.gates, reimplement_unlocked: ok || state.gates.reimplement_unlocked } };
       await saveProjectState(ctx.cwd, next);
       await refreshUi(ctx, ctx.cwd, next);

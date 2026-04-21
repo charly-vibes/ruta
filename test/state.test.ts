@@ -7,6 +7,7 @@ import {
   glossaryGateSatisfied,
   readGateSatisfied,
   readSpecComments,
+  reimplementGateSatisfied,
   stripMarkdownFormatting,
   writeSpecComments,
   type SpecComment,
@@ -38,6 +39,39 @@ test('readGateSatisfied requires both notebook content and unity sentence', asyn
   await writeFile(notebook, '# Notebook\n\n- one note\n', 'utf8');
   assert.equal(await readGateSatisfied(notebook, null), false);
   assert.equal(await readGateSatisfied(notebook, 'Unity sentence'), true);
+});
+
+test('readGateSatisfied rejects scaffold-only notebook', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-read-gate-scaffold-'));
+  const notebook = path.join(dir, 'notebook.md');
+  // This is exactly what scaffoldProject() writes
+  await writeFile(notebook, '# Notebook\n\n- [2026-04-21T00:00:00.000Z] Things I don\'t know yet:\n', 'utf8');
+  assert.equal(await readGateSatisfied(notebook, 'Unity sentence'), false);
+});
+
+test('reimplementGateSatisfied unscoped counts all major headings', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-reimplement-gate-'));
+  const specPath = path.join(dir, 'spec.md');
+  const gapsPath = path.join(dir, 'gaps.md');
+  await writeFile(specPath, '# Section A\n\n## Section B\n\n# Section C\n', 'utf8');
+  // 3 headings, only 2 gaps — gate not satisfied without scope
+  await writeFile(gapsPath, '# Gaps\n\n### G-001\n\n**Citation:** §A\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n\n### G-002\n\n**Citation:** §B\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n', 'utf8');
+  assert.equal(await reimplementGateSatisfied(specPath, gapsPath), false);
+  // 3 gaps — gate satisfied
+  await writeFile(gapsPath, '# Gaps\n\n### G-001\n\n**Citation:** §A\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n\n### G-002\n\n**Citation:** §B\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n\n### G-003\n\n**Citation:** §C\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n', 'utf8');
+  assert.equal(await reimplementGateSatisfied(specPath, gapsPath), true);
+});
+
+test('reimplementGateSatisfied scoped counts only declared headings', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-reimplement-gate-scoped-'));
+  const specPath = path.join(dir, 'spec.md');
+  const gapsPath = path.join(dir, 'gaps.md');
+  await writeFile(specPath, '# Section A\n\n## Section B\n\n# Section C\n', 'utf8');
+  // Only "Section A, Section B" in scope — 1 gap is not enough, 2 is
+  await writeFile(gapsPath, '# Gaps\n\n### G-001\n\n**Citation:** §A\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n', 'utf8');
+  assert.equal(await reimplementGateSatisfied(specPath, gapsPath, 'Section A, Section B'), false);
+  await writeFile(gapsPath, '# Gaps\n\n### G-001\n\n**Citation:** §A\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n\n### G-002\n\n**Citation:** §B\n**Decision forced:** \n**Spec\'s guidance:** \n**Your proposed resolution:** \n**Confidence:** low\n**Gap type:** likely spec silence (not my ignorance)\n**Raised in session:** 2026-04-21\n', 'utf8');
+  assert.equal(await reimplementGateSatisfied(specPath, gapsPath, 'Section A, Section B'), true);
 });
 
 test('glossaryGateSatisfied requires a non-empty paraphrase block', async () => {
