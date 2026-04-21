@@ -22,6 +22,7 @@ export interface RutaProjectState {
   gates: Record<string, boolean>;
   prompt_bundle_hash: string;
   scope?: string;
+  secondary_model?: string;
   disclosure_ack?: boolean;
 }
 

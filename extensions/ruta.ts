@@ -46,6 +46,7 @@ import {
 } from "./prompts.ts";
 import { openSpecViewer } from "./spec-viewer.ts";
 import { openTriageView } from "./triage.ts";
+import { detectDisagreement, formatDisagreementReport, selectSecondaryModel } from "./disagree.ts";
 
 const WHY_TEXT = `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you have to form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities, but it must not resolve them for you.`;
 
@@ -555,16 +556,17 @@ export default function ruta(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("ruta-disagree", {
-    description: "Re-run the latest user prompt against a secondary model when available",
+    description: "Re-run the latest user prompt against a secondary model and compare",
     handler: async (_args, ctx) => {
       if (!ctx.model) {
         ctx.ui.notify("No active model selected", "error");
         return;
       }
+      const state = await loadProjectState(ctx.cwd);
       const available = ctx.modelRegistry.getAvailable();
-      const secondary = available.find((candidate) => candidate.provider !== ctx.model?.provider);
+      const secondary = selectSecondaryModel(available, ctx.model, state?.secondary_model);
       if (!secondary) {
-        ctx.ui.notify("No secondary provider-configured model available; /ruta-disagree is disabled.", "warning");
+        ctx.ui.notify("No secondary provider-configured model available; /ruta-disagree requires two providers.", "warning");
         return;
       }
       const branch = ctx.sessionManager.getBranch();
@@ -584,7 +586,7 @@ export default function ruta(pi: ExtensionAPI) {
       const response = await complete(
         secondary,
         {
-          systemPrompt: composeSystemPrompt(modePrompt((await loadProjectState(ctx.cwd))?.current_mode ?? "reimplement")),
+          systemPrompt: composeSystemPrompt(modePrompt(state?.current_mode ?? "reimplement")),
           messages: [{
             role: "user",
             content: [{ type: "text", text: userText }],
@@ -597,18 +599,32 @@ export default function ruta(pi: ExtensionAPI) {
         .filter((block): block is { type: "text"; text: string } => block.type === "text")
         .map((block) => block.text)
         .join("\n");
-      const diffText = [
-        `# ruta disagree`,
-        "",
-        `## Primary (${ctx.model.id})`,
-        assistantText || "(no prior assistant text found)",
-        "",
-        `## Secondary (${secondary.id})`,
-        secondaryText,
-        "",
-        "Reminder: agreement between models is not evidence of spec clarity.",
-      ].join("\n");
-      await showScratch(ctx, "ruta disagree", diffText);
+      const disagrees = detectDisagreement(assistantText, secondaryText);
+      const report = formatDisagreementReport({
+        primary: assistantText,
+        secondary: secondaryText,
+        primaryId: ctx.model.id,
+        secondaryId: secondary.id,
+        disagrees,
+        section: undefined,
+      });
+      await showScratch(ctx, "ruta disagree", report);
+    },
+  });
+
+  pi.registerCommand("ruta-secondary-model", {
+    description: "Set or show the secondary model for /ruta-disagree",
+    handler: async (args, ctx) => {
+      const state = await loadStateOrNotify(ctx.cwd, ctx);
+      if (!state) return;
+      const modelId = args.trim();
+      if (!modelId) {
+        ctx.ui.notify(state.secondary_model ? `Secondary model: ${state.secondary_model}` : "No secondary model configured", "info");
+        return;
+      }
+      const next = { ...state, secondary_model: modelId };
+      await saveProjectState(ctx.cwd, next);
+      ctx.ui.notify(`Secondary model set to ${modelId}`, "success");
     },
   });
 
