@@ -31,12 +31,18 @@ test('selectSecondaryModel returns null when no other provider is available', ()
   assert.equal(selectSecondaryModel(available, primary, undefined), null);
 });
 
-test('selectSecondaryModel returns null when configured model is not available', () => {
+test('selectSecondaryModel falls back to different-provider model when configured model is absent', () => {
   const available = [makeModel('gpt-4o', 'openai')];
   const primary = makeModel('claude-3-5-sonnet', 'anthropic');
   // configured model not in available list → fall back to first different-provider
   const result = selectSecondaryModel(available, primary, 'nonexistent-model');
   assert.equal(result?.id, 'gpt-4o');
+});
+
+test('detectDisagreement returns false when either input is empty', () => {
+  assert.equal(detectDisagreement('', 'The session token should be embedded in the JWT.'), false);
+  assert.equal(detectDisagreement('Store tokens server-side.', ''), false);
+  assert.equal(detectDisagreement('', ''), false);
 });
 
 test('detectDisagreement returns false for near-identical texts', () => {

@@ -599,7 +599,7 @@ export default function ruta(pi: ExtensionAPI) {
             timestamp: Date.now(),
           }],
         },
-        { apiKey: auth.apiKey, headers: auth.headers },
+        { apiKey: auth.apiKey, headers: auth.headers, signal: ctx.signal },
       );
       const secondaryText = response.content
         .filter((block): block is { type: "text"; text: string } => block.type === "text")

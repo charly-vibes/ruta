@@ -52,6 +52,14 @@ test('readGateSatisfied rejects scaffold-only notebook', async () => {
   assert.equal(await readGateSatisfied(notebook, 'Unity sentence'), false);
 });
 
+test('readGateSatisfied accepts user-extended scaffold line as real content', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-read-gate-extended-'));
+  const notebook = path.join(dir, 'notebook.md');
+  // User extended the scaffold placeholder with actual content after the colon
+  await writeFile(notebook, '# Notebook\n\n- [2026-04-21T00:00:00.000Z] Things I don\'t know yet: session expiry behavior\n', 'utf8');
+  assert.equal(await readGateSatisfied(notebook, 'Unity sentence'), true);
+});
+
 test('reimplementGateSatisfied unscoped counts all major headings', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'ruta-reimplement-gate-'));
   const specPath = path.join(dir, 'spec.md');

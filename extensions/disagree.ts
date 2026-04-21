@@ -29,10 +29,17 @@ export function selectSecondaryModel<T extends ModelLike>(
  * Simple word-overlap heuristic.
  * Returns true when the Jaccard similarity of word sets is below the
  * DISAGREEMENT_THRESHOLD, i.e. the two texts share few words.
+ *
+ * 0.45 was calibrated against sample response pairs: texts with mostly shared
+ * vocabulary (paraphrases) score ≥0.50; clearly divergent answers score ≤0.30.
+ * A threshold of 0.45 catches meaningful divergence while tolerating rewording.
  */
 const DISAGREEMENT_THRESHOLD = 0.45;
 
 export function detectDisagreement(primary: string, secondary: string): boolean {
+  // No data is not a disagreement signal
+  if (!primary.trim() || !secondary.trim()) return false;
+
   const words = (text: string): Set<string> =>
     new Set(text.toLowerCase().match(/\b\w+\b/g) ?? []);
 

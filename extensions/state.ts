@@ -336,7 +336,9 @@ export async function glossaryGateSatisfied(filePath: string): Promise<boolean> 
   return entries.some((entry) => stripMarkdownFormatting(entry.userParaphrase).length > 0);
 }
 
-export const NOTEBOOK_SCAFFOLD_PATTERN = /Things I don't know yet:/;
+// Matches the exact scaffold line seeded by scaffoldProject().
+// Lines with trailing content after the colon are user notes, not templates.
+export const NOTEBOOK_SCAFFOLD_PATTERN = /^-\s+\[.*\]\s+Things I don't know yet:\s*$/;
 
 export async function readGateSatisfied(notebookPath: string, unitySentence: string | null): Promise<boolean> {
   if (!unitySentence || !unitySentence.trim()) return false;

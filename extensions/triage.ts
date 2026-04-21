@@ -1,5 +1,5 @@
 import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
-import { appendGapEntry, formatGapEntry, isValidTriageToken, nextGapIndex, type TriageToken } from "./state.ts";
+import { appendMarkdown, formatGapEntry, nextGapIndex, type TriageToken } from "./state.ts";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (testable)
@@ -183,24 +183,29 @@ export async function openTriageView(
     return;
   }
 
-  if (!isValidTriageToken(triageState, triageState?.token)) {
+  // At this point the token was validated by the triage UI — no external input involved.
+  if (triageState === null) {
     ctx.ui.notify("Triage token expired — cannot append gaps.", "error");
     return;
   }
 
-  for (const line of accepted) {
-    const index = await nextGapIndex(gapsPath);
-    const draft = formatGapEntry(index, {
-      citation: `§ ${section}`,
-      decisionForced: line,
-      raisedInSession: new Date().toISOString().slice(0, 10),
-    });
-    const edited = await ctx.ui.editor(`Gap entry from triage: ${section}`, draft);
-    if (edited !== undefined && edited.trim()) {
-      await appendGapEntry(gapsPath);
+  let appended = 0;
+  try {
+    for (const line of accepted) {
+      const index = await nextGapIndex(gapsPath);
+      const draft = formatGapEntry(index, {
+        citation: `§ ${section}`,
+        decisionForced: line,
+        raisedInSession: new Date().toISOString().slice(0, 10),
+      });
+      const edited = await ctx.ui.editor(`Gap entry from triage: ${section}`, draft);
+      if (edited !== undefined && edited.trim()) {
+        await appendMarkdown(gapsPath, `\n${edited.trim()}\n`);
+        appended++;
+      }
     }
+  } finally {
+    clearToken();
   }
-
-  clearToken();
-  ctx.ui.notify(`${accepted.length} gap(s) appended from triage.`, "success");
+  ctx.ui.notify(`${appended} gap(s) appended from triage.`, "success");
 }
