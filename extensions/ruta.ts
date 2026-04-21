@@ -45,6 +45,7 @@ import {
   REIMPL_GAP_PROBE_PROMPT,
 } from "./prompts.ts";
 import { openSpecViewer } from "./spec-viewer.ts";
+import { openTriageView } from "./triage.ts";
 
 const WHY_TEXT = `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you have to form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities, but it must not resolve them for you.`;
 
@@ -505,17 +506,14 @@ export default function ruta(pi: ExtensionAPI) {
       }
       try {
         const probe = await runGapProbe(ctx, ctx.cwd, section);
-        const token = makeTriageToken();
+        makeTriageToken();
+        const paths = artifactPaths(ctx.cwd);
         await refreshUi(ctx, ctx.cwd, state);
-        await showScratch(
-          ctx,
-          `Gap probe: ${section}`,
-          `${probe}\n\nTriage token active for /ruta_add_gap: ${token}\nUse /ruta-add-gap to convert accepted lines into structured entries.`,
-        );
+        await openTriageView(ctx, probe, section, paths.gaps, triageState, clearTriageToken);
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
-      } finally {
         clearTriageToken();
+      } finally {
         await refreshUi(ctx, ctx.cwd, state);
       }
     },
