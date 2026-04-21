@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { canonicalizeSpec } from './test-helpers';
-import { glossaryGateSatisfied, readGateSatisfied, stripMarkdownFormatting } from '../extensions/state';
+import {
+  appendSpecComment,
+  deriveSpecCommentAnchor,
+  glossaryGateSatisfied,
+  readGateSatisfied,
+  readSpecComments,
+  stripMarkdownFormatting,
+  writeSpecComments,
+  type SpecComment,
+} from '../extensions/state';
 import { composeSystemPrompt, BASE_PROMPT } from '../extensions/prompts';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -40,4 +49,75 @@ test('glossaryGateSatisfied requires a non-empty paraphrase block', async () => 
     'utf8',
   );
   assert.equal(await glossaryGateSatisfied(glossary), true);
+});
+
+test('writeSpecComments round-trips comment data', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-comments-roundtrip-'));
+  const commentsPath = path.join(dir, 'comments.json');
+  const comments: SpecComment[] = [{
+    id: 'c-1',
+    specPath: 'spec/example.md',
+    line: 7,
+    sectionRef: 'Goals',
+    excerpt: 'Goal text',
+    text: 'Needs clarification',
+    createdAt: '2026-04-21T00:00:00.000Z',
+  }];
+
+  await writeSpecComments(commentsPath, comments);
+
+  assert.deepEqual(await readSpecComments(commentsPath), comments);
+});
+
+test('appendSpecComment preserves existing comments', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-comments-append-'));
+  const commentsPath = path.join(dir, 'comments.json');
+
+  await appendSpecComment(commentsPath, {
+    id: 'c-1',
+    specPath: 'spec/example.md',
+    line: 3,
+    sectionRef: 'Intro',
+    excerpt: 'First line',
+    text: 'First comment',
+    createdAt: '2026-04-21T00:00:00.000Z',
+  });
+  await appendSpecComment(commentsPath, {
+    id: 'c-2',
+    specPath: 'spec/example.md',
+    line: 9,
+    sectionRef: 'Goals',
+    excerpt: 'Second line',
+    text: 'Second comment',
+    createdAt: '2026-04-21T00:01:00.000Z',
+  });
+
+  assert.deepEqual(
+    (await readSpecComments(commentsPath)).map((comment) => comment.id),
+    ['c-1', 'c-2'],
+  );
+});
+
+test('deriveSpecCommentAnchor returns excerpt and best-effort section label', () => {
+  const spec = [
+    '# Intro',
+    '',
+    'Opening context',
+    'Still intro',
+    '## Goals',
+    '',
+    'Goal line',
+    'Another goal detail',
+  ].join('\n');
+
+  assert.deepEqual(deriveSpecCommentAnchor(spec, 7), {
+    line: 7,
+    sectionRef: 'Goals',
+    excerpt: 'Goal line',
+  });
+  assert.deepEqual(deriveSpecCommentAnchor(spec, 6), {
+    line: 6,
+    sectionRef: 'Goals',
+    excerpt: 'Goal line',
+  });
 });

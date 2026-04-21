@@ -42,9 +42,29 @@ export interface GapEntry {
   raisedInSession: string;
 }
 
+export interface SpecCommentAnchor {
+  line: number;
+  sectionRef: string | null;
+  excerpt: string;
+}
+
+export interface SpecComment extends SpecCommentAnchor {
+  id: string;
+  specPath: string;
+  text: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+interface SpecCommentStore {
+  schemaVersion: "0.1";
+  comments: SpecComment[];
+}
+
 export const ROUTA_DIR = ".ruta";
 export const STATE_PATH = path.join(ROUTA_DIR, "ruta.json");
 export const PROMPTS_VERSION_PATH = "prompts-version.txt";
+export const COMMENTS_PATH = path.join(ROUTA_DIR, "comments.json");
 
 export const MODE_ORDER: RutaMode[] = ["read", "glossary", "reimplement"];
 
@@ -113,6 +133,7 @@ export function artifactPaths(cwd: string) {
     specDir: path.join(cwd, "spec"),
     stateDir: path.join(cwd, ROUTA_DIR),
     chavrutaDir: path.join(cwd, ROUTA_DIR, "chavruta"),
+    comments: path.join(cwd, COMMENTS_PATH),
     notebook: path.join(cwd, "notebook.md"),
     glossary: path.join(cwd, "glossary.md"),
     propositions: path.join(cwd, "propositions.md"),
@@ -377,6 +398,60 @@ export async function nextGapIndex(filePath: string): Promise<number> {
 export async function appendGapEntry(filePath: string, seed?: Partial<GapEntry>): Promise<void> {
   const entry = formatGapEntry(await nextGapIndex(filePath), seed);
   await appendMarkdown(filePath, `\n${entry}\n`);
+}
+
+export async function readSpecComments(filePath: string): Promise<SpecComment[]> {
+  if (!(await pathExists(filePath))) return [];
+  const raw = await readText(filePath);
+  const parsed = JSON.parse(raw) as SpecCommentStore | SpecComment[];
+  if (Array.isArray(parsed)) return parsed;
+  return parsed.comments ?? [];
+}
+
+export async function writeSpecComments(filePath: string, comments: SpecComment[]): Promise<void> {
+  const payload: SpecCommentStore = {
+    schemaVersion: "0.1",
+    comments,
+  };
+  await writeText(filePath, `${JSON.stringify(payload, null, 2)}\n`);
+}
+
+export async function appendSpecComment(filePath: string, comment: SpecComment): Promise<void> {
+  const comments = await readSpecComments(filePath);
+  comments.push(comment);
+  await writeSpecComments(filePath, comments);
+}
+
+export function deriveSpecCommentAnchor(specText: string, lineNumber: number): SpecCommentAnchor {
+  const lines = specText.split("\n");
+  const line = Math.max(1, Math.min(lineNumber, Math.max(lines.length, 1)));
+  const sectionRef = deriveSectionRefForLine(lines, line);
+  const excerpt = deriveExcerptForLine(lines, line);
+  return { line, sectionRef, excerpt };
+}
+
+export async function deriveSpecCommentAnchorForPath(specPath: string, lineNumber: number): Promise<SpecCommentAnchor> {
+  return deriveSpecCommentAnchor(await readText(specPath), lineNumber);
+}
+
+function deriveSectionRefForLine(lines: string[], lineNumber: number): string | null {
+  for (let index = Math.min(lineNumber - 1, lines.length - 1); index >= 0; index -= 1) {
+    const match = lines[index]?.match(/^(#{1,6})\s+(.+)$/);
+    if (match) return match[2].trim();
+  }
+  return null;
+}
+
+function deriveExcerptForLine(lines: string[], lineNumber: number): string {
+  const candidates = [
+    lines[lineNumber - 1],
+    ...lines.slice(lineNumber),
+    ...lines.slice(0, Math.max(0, lineNumber - 1)).reverse(),
+  ];
+  const chosen = candidates
+    .map((line) => line?.trim() ?? "")
+    .find((line) => line.length > 0) ?? "";
+  return chosen.replace(/\s+/g, " ").slice(0, 160);
 }
 
 export async function getSpecSectionByRef(specPath: string, sectionRef: string): Promise<string> {
