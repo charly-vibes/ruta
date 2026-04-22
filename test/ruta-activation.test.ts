@@ -302,6 +302,31 @@ test('ruta-switch shows guidance when no sessions exist and updates active sessi
   assert.equal(active[String(process.pid)]?.session_id, 'session-1');
 });
 
+test('ruta-note remains executable even when disclosure does not highlight it for glossary mode', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-disclosure-invariant-'));
+  await writeText(path.join(dir, 'prompts-version.txt'), 'prompt-hash\n');
+  await writeText(path.join(dir, 'spec.md'), '# Spec\n\nBody\n');
+  const uuid = computeSpecUUID(dir, 'spec.md');
+  const sessionDir = path.join(dir, '.ruta', uuid, 'session-1');
+  const state = await scaffoldSession(dir, 'spec.md', sessionDir);
+  state.current_mode = 'glossary';
+  state.gates.read_unlocked = true;
+  await writeText(path.join(sessionDir, 'state.json'), `${JSON.stringify(state, null, 2)}\n`);
+  await writeActiveEntry(dir, uuid, 'session-1', 'spec.md');
+
+  const fake = makeFakePi();
+  ruta(fake.api as any);
+
+  const note = fake.commands.get('ruta-note');
+  assert.ok(note, 'ruta-note command should be registered');
+
+  const { ctx } = makeCtx(dir);
+  await note.handler('still allowed outside disclosure focus', ctx);
+
+  const notebook = await readFile(path.join(sessionDir, 'notebook.md'), 'utf8');
+  assert.ok(notebook.includes('still allowed outside disclosure focus'));
+});
+
 test('ruta commands do not implicitly reactivate guardrails after /ruta-exit', async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'ruta-activation-exit-'));
   await writeText(path.join(dir, 'prompts-version.txt'), 'prompt-hash\n');

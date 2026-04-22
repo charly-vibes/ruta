@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { buildHelpText, buildStatusText, buildTutorialText, HELP_TOPIC_KEYS } from '../extensions/tutorial';
 import type { RutaProjectState } from '../extensions/state';
+import { DISCLOSURE_FIXTURES } from './disclosure-fixtures';
 
 function makeState(overrides: Partial<RutaProjectState> = {}): RutaProjectState {
   return {
@@ -142,6 +143,27 @@ test('buildStatusText falls back to bootstrap commands with a recovery hint when
   assert.ok(text.includes('/ruta-tutorial'));
   assert.ok(text.includes('## Recovery'));
   assert.ok(text.includes('/ruta-resume'));
+});
+
+test('disclosure fixtures match help and status text across states', () => {
+  for (const fixture of Object.values(DISCLOSURE_FIXTURES)) {
+    const helpText = buildHelpText(fixture.state, null);
+    const statusText = buildStatusText(fixture.state, {
+      glossaryTerms: 1,
+      gaps: 1,
+      majorSections: 3,
+    });
+
+    for (const command of fixture.availableNow) {
+      assert.ok(helpText.includes(command), `${fixture.name} help should include ${command}`);
+      assert.ok(statusText.includes(command), `${fixture.name} status should include ${command}`);
+    }
+
+    if (fixture.nextUnlock) {
+      assert.ok(helpText.includes(fixture.nextUnlock.gate));
+      assert.ok(statusText.includes(fixture.nextUnlock.transitionCommand));
+    }
+  }
 });
 
 test('buildTutorialText for reimplement mode points to gap discovery workflow', () => {
