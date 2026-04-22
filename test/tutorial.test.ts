@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildTutorialText } from '../extensions/tutorial';
+import { buildHelpText, buildTutorialText, HELP_TOPIC_KEYS } from '../extensions/tutorial';
 import type { RutaProjectState } from '../extensions/state';
 
 function makeState(overrides: Partial<RutaProjectState> = {}): RutaProjectState {
@@ -53,6 +53,46 @@ test('buildTutorialText for glossary mode points to paraphrase workflow', () => 
   // /ruta-probe appears in Key concepts section (as illustration), not in "Commands to use now"
   assert.ok(!text.includes('- /ruta-probe'));
   assert.ok(text.toLowerCase().includes('paraphrase'));
+});
+
+test('buildHelpText with no topic lists all topics', () => {
+  const text = buildHelpText(null);
+  assert.ok(text.includes('# ruta help'));
+  assert.ok(text.includes('Usage: /ruta-help <topic>'));
+  // A sample of expected topics
+  for (const topic of ['unity', 'gap', 'probe', 'read', 'glossary', 'reimplement', 'gate', 'paraphrase']) {
+    assert.ok(text.includes(topic), `Expected topic index to include "${topic}"`);
+  }
+});
+
+test('buildHelpText for a known concept returns detailed explanation', () => {
+  const text = buildHelpText('unity');
+  assert.ok(text.includes('Unity sentence'));
+  assert.ok(text.includes('Mortimer Adler'));
+  assert.ok(text.includes('/ruta-unity'));
+});
+
+test('buildHelpText accepts /ruta- prefix and resolves to same topic', () => {
+  const withPrefix = buildHelpText('/ruta-unity');
+  const withoutPrefix = buildHelpText('unity');
+  assert.equal(withPrefix, withoutPrefix);
+});
+
+test('buildHelpText for unknown topic returns helpful error with suggestions', () => {
+  const text = buildHelpText('uni');
+  assert.ok(text.includes('Unknown topic'));
+  // Should suggest "unity" since it starts with "uni"
+  assert.ok(text.includes('unity'));
+});
+
+test('HELP_TOPIC_KEYS is sorted and non-empty', () => {
+  assert.ok(HELP_TOPIC_KEYS.length > 0);
+  for (let i = 1; i < HELP_TOPIC_KEYS.length; i++) {
+    assert.ok(
+      HELP_TOPIC_KEYS[i - 1] <= HELP_TOPIC_KEYS[i],
+      `Keys not sorted: "${HELP_TOPIC_KEYS[i - 1]}" > "${HELP_TOPIC_KEYS[i]}"`,
+    );
+  }
 });
 
 test('buildTutorialText for reimplement mode points to gap discovery workflow', () => {

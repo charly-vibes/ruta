@@ -50,7 +50,7 @@ import { openSpecViewer } from "./spec-viewer.ts";
 import { openTriageView } from "./triage.ts";
 import { detectDisagreement, formatDisagreementReport, selectSecondaryModel } from "./disagree.ts";
 import { detectPromptOverrides } from "./prompt-integrity.ts";
-import { buildTutorialText } from "./tutorial.ts";
+import { buildHelpText, buildTutorialText, HELP_TOPIC_KEYS } from "./tutorial.ts";
 import { openTextViewer } from "./text-viewer.ts";
 
 const WHY_TEXT: Record<string, string> = {
@@ -448,6 +448,18 @@ export default function ruta(pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       const state = await loadProjectState(ctx.cwd);
       await showScratch(ctx, "ruta tutorial", buildTutorialText(state));
+    },
+  });
+
+  pi.registerCommand("ruta-help", {
+    description: "Explain a ruta concept or command — /ruta-help <topic> (e.g. unity, gap, probe, read, glossary)",
+    getArgumentCompletions: async (argumentPrefix) => {
+      return HELP_TOPIC_KEYS
+        .filter((key) => key.startsWith(argumentPrefix.toLowerCase()))
+        .map((key) => ({ value: key, description: key }));
+    },
+    handler: async (args, ctx) => {
+      await showScratch(ctx, "ruta help", buildHelpText(args.trim() || null));
     },
   });
 
