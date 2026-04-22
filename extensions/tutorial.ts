@@ -31,13 +31,13 @@ function modeTutorial(state: RutaProjectState): ModeTutorial {
       purpose: 'Define important terms from the spec and test whether your own paraphrases actually hold up.',
       commands: [
         '/ruta-add-term <term> — add a glossary entry scaffold',
-        '/ruta-test <term> — probe whether your paraphrase is adequate',
+        '/ruta-probe-term <term> — probe whether your paraphrase is adequate',
         '/ruta-done-glossary — check the glossary gate and optionally advance',
         '/ruta-why — explain why help is narrow in this mode',
         '/ruta-tutorial — show this guide again',
       ],
       success: 'Glossary mode is complete when glossary.md contains at least one term with a non-empty user paraphrase.',
-      nextAction: 'Pick a term that matters to the architecture, add it with /ruta-add-term <term>, then run /ruta-test <term>.',
+      nextAction: 'Pick a term that matters to the architecture, add it with /ruta-add-term <term>, then run /ruta-probe-term <term>.',
     };
   }
 
@@ -63,7 +63,7 @@ const KEY_CONCEPTS = `## Key concepts
 - unity sentence — one sentence stating what the spec is trying to accomplish, in your own words. Mortimer Adler's test: you haven't understood an argument until you can restate it without quoting the source.
 - gap — an implementation decision the spec leaves silent, ambiguous, or forced. Something you would have to resolve when actually building this.
 - probe — an AI-assisted scan of one spec section that lists implementation gaps. The AI surfaces ambiguities; you decide whether to resolve them.
-- paraphrase-adequacy — whether your own definition of a term matches how the spec actually uses it. /ruta-test checks this without writing the definition for you.
+- paraphrase-adequacy — whether your own definition of a term matches how the spec actually uses it. /ruta-probe-term checks this without writing the definition for you.
 - gate — a checkpoint ruta uses before letting you advance to the next mode. Gates check that artifacts are non-empty, not that they are good.`;
 
 function formatModeBlock(mode: RutaMode, state: RutaProjectState, tutorial: ModeTutorial): string {
@@ -156,7 +156,7 @@ Probes are only available in reimplement mode.`,
 
 The gap between "I know what this means" and "I can define it myself" is where most comprehension failures hide. You may think you understand "idempotency key" but your mental model might be subtly wrong in a way that matters for the implementation.
 
-/ruta-test <term> checks paraphrase adequacy. It does not write the definition for you — it reads your definition in glossary.md and the spec's usage of the term and tells you where they diverge.
+/ruta-probe-term <term> checks paraphrase adequacy. It does not write the definition for you — it reads your definition in glossary.md and the spec's usage of the term and tells you where they diverge.
 
 Paraphrase adequacy is not about correctness in the abstract; it is about whether your definition is consistent with the spec's usage.`,
   },
@@ -199,7 +199,7 @@ What to do:
 1. Pick a term that matters to the architecture
 2. Add an entry scaffold: /ruta-add-term <term>
 3. Open glossary.md and write your own paraphrase under the "paraphrase" heading
-4. Test it: /ruta-test <term>
+4. Test it: /ruta-probe-term <term>
 5. Revise your paraphrase based on the feedback, or move on to the next term
 
 Glossary mode is complete when glossary.md has at least one term with a non-empty user paraphrase.`,
@@ -288,15 +288,15 @@ Available in glossary mode. The scaffold includes:
 - A "spec usage" section (for you to fill in with how the spec uses this term)
 - A "paraphrase" section (for you to fill in with your own definition)
 
-After adding the scaffold, open glossary.md and write your paraphrase. Then run /ruta-test <term> to check whether your paraphrase matches the spec's usage.`,
+After adding the scaffold, open glossary.md and write your paraphrase. Then run /ruta-probe-term <term> to check whether your paraphrase matches the spec's usage.`,
   },
-  test: {
-    title: '/ruta-test <term>',
+  'probe-term': {
+    title: '/ruta-probe-term <term>',
     body: `Checks whether your paraphrase of a term matches how the spec actually uses it.
 
 Available in glossary mode. The AI reads your paraphrase from glossary.md and the spec's usage of the term, then reports where they agree and where they diverge.
 
-Important: /ruta-test does NOT write the definition for you. It only checks whether yours is adequate. You must write the paraphrase yourself in glossary.md before running this command.
+Important: /ruta-probe-term does NOT write the definition for you. It only checks whether yours is adequate. You must write the paraphrase yourself in glossary.md before running this command.
 
 Use the feedback to revise your paraphrase or to understand a subtlety you missed.`,
   },

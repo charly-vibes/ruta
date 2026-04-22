@@ -55,7 +55,7 @@ import { openTextViewer } from "./text-viewer.ts";
 
 const WHY_TEXT: Record<string, string> = {
   read: `Read mode: AI is fully restricted so that your unity sentence and ignorance list come from you, not from a summary. If the AI reads for you, you form no mental model — only the appearance of one. Mortimer Adler's test: you haven't understood an argument until you can restate it in your own words without quoting the source. Use /ruta-note to capture observations and questions. Use /ruta-unity when you can state in one sentence what the spec is trying to accomplish.`,
-  glossary: `Glossary mode: AI is narrowed so it can test a paraphrase without writing one for you. The gap between "I know what this means" and "I can define it myself" is where most comprehension failures hide. /ruta-add-term scaffolds an entry for you to fill in. /ruta-test checks whether your paraphrase actually matches how the spec uses the term — it does not write the definition for you.`,
+  glossary: `Glossary mode: AI is narrowed so it can test a paraphrase without writing one for you. The gap between "I know what this means" and "I can define it myself" is where most comprehension failures hide. /ruta-add-term scaffolds an entry for you to fill in. /ruta-probe-term checks whether your paraphrase actually matches how the spec uses the term — it does not write the definition for you.`,
   reimplement: `Reimplement mode: AI can scan a section for implementation gaps, but it must not resolve them. A gap is a decision the spec leaves silent, ambiguous, or forced — something you would have to decide when building. Surfacing gaps now is the point. Resolving them now would skip the architecture conversation. Use /ruta-probe <section> to find gaps. Use /ruta-add-gap to record ones you spot manually.`,
   default: `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities but must not resolve them for you.`,
 };
@@ -228,7 +228,7 @@ export default function ruta(pi: ExtensionAPI) {
     }
 
     if (state.current_mode === "glossary") {
-      ctx.ui.notify("Glossary mode blocks free-form chat. Use /ruta-add-term, /ruta-test, or /ruta-done-glossary.", "info");
+      ctx.ui.notify("Glossary mode blocks free-form chat. Use /ruta-add-term, /ruta-probe-term, or /ruta-done-glossary.", "info");
       return { action: "handled" };
     }
 
@@ -529,14 +529,14 @@ export default function ruta(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("ruta-test", {
+  pi.registerCommand("ruta-probe-term", {
     description: "Check whether your paraphrase of a glossary term matches how the spec actually uses it (does not write the definition for you)",
     handler: async (args, ctx) => {
       const state = await loadStateOrNotify(ctx.cwd, ctx);
       if (!state) return;
       const term = args.trim();
       if (!term) {
-        ctx.ui.notify("Usage: /ruta-test <term>", "error");
+        ctx.ui.notify("Usage: /ruta-probe-term <term>", "error");
         return;
       }
       try {

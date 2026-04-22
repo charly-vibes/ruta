@@ -85,7 +85,7 @@ Then inside pi:
 /ruta-done-reading
 /ruta-tutorial
 /ruta-add-term Connection
-/ruta-test Connection
+/ruta-probe-term Connection
 /ruta-done-glossary
 /ruta-tutorial
 /ruta-probe "Mode contract: reimplement"
