@@ -14,6 +14,7 @@ export interface ModeHistoryEntry {
 export interface RutaProjectState {
   schema_version: "0.2";
   spec_path: string;
+  source_spec_path?: string;
   spec_hash: string;
   spec_hash_canonicalization: "nfc-lf-trim-v1";
   current_mode: RutaMode;
@@ -62,10 +63,33 @@ interface SpecCommentStore {
   comments: SpecComment[];
 }
 
+export interface ActiveSessionEntry {
+  spec_uuid: string;
+  session_id: string;
+  source_spec_path: string;
+  started_at: string;
+}
+
+export interface SessionMeta {
+  source_spec_path: string;
+  sessions: string[];
+}
+
+export interface SessionListEntry {
+  uuid: string;
+  sessionId: string;
+  sourcePath: string;
+  mode: RutaMode;
+  sessionDir: string;
+}
+
 export const ROUTA_DIR = ".ruta";
 export const STATE_PATH = path.join(ROUTA_DIR, "ruta.json");
 export const PROMPTS_VERSION_PATH = "prompts-version.txt";
 export const COMMENTS_PATH = path.join(ROUTA_DIR, "comments.json");
+export const ACTIVE_SESSIONS_PATH = path.join(ROUTA_DIR, "active.json");
+export const SESSION_STATE_FILE = "state.json";
+export const SESSION_META_FILE = "meta.json";
 
 export const MODE_ORDER: RutaMode[] = ["read", "glossary", "reimplement"];
 
@@ -117,34 +141,151 @@ export async function computeSpecHash(specPath: string): Promise<string> {
   return sha256Text(canonicalizeSpec(content));
 }
 
-export async function loadProjectState(cwd: string): Promise<RutaProjectState | null> {
-  const filePath = path.join(cwd, STATE_PATH);
+export function computeSpecUUID(cwd: string, specPath: string): string {
+  const abs = path.resolve(cwd, specPath);
+  return createHash("sha256").update(abs, "utf8").digest("hex").slice(0, 16);
+}
+
+function isSessionDir(dirPath: string): boolean {
+  const normalized = path.normalize(dirPath);
+  const parts = normalized.split(path.sep).filter(Boolean);
+  if (parts.length < 3) return false;
+  const [rutaMarker, _uuid, sessionId] = parts.slice(-3);
+  return rutaMarker === ROUTA_DIR && /^session-\d+$/.test(sessionId ?? "");
+}
+
+function stateFilePath(dirPath: string): string {
+  return isSessionDir(dirPath) ? path.join(dirPath, SESSION_STATE_FILE) : path.join(dirPath, STATE_PATH);
+}
+
+export async function loadProjectState(dirPath: string): Promise<RutaProjectState | null> {
+  const filePath = stateFilePath(dirPath);
   if (!(await pathExists(filePath))) return null;
   const raw = await readText(filePath);
   return JSON.parse(raw) as RutaProjectState;
 }
 
-export async function saveProjectState(cwd: string, state: RutaProjectState): Promise<void> {
-  const filePath = path.join(cwd, STATE_PATH);
+export async function saveProjectState(dirPath: string, state: RutaProjectState): Promise<void> {
+  const filePath = stateFilePath(dirPath);
   await writeText(filePath, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-export function artifactPaths(cwd: string) {
+export async function pruneDeadPIDs(map: Record<string, ActiveSessionEntry>): Promise<Record<string, ActiveSessionEntry>> {
+  const next: Record<string, ActiveSessionEntry> = {};
+  for (const [pid, entry] of Object.entries(map)) {
+    try {
+      process.kill(Number(pid), 0);
+      next[pid] = entry;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "EPERM") {
+        next[pid] = entry;
+      }
+      // ESRCH and invalid pids are treated as stale and removed on read.
+    }
+  }
+  return next;
+}
+
+export async function readActiveJson(cwd: string): Promise<Record<string, ActiveSessionEntry>> {
+  const filePath = path.join(cwd, ACTIVE_SESSIONS_PATH);
+  if (!(await pathExists(filePath))) return {};
+  const parsed = JSON.parse(await readText(filePath)) as Record<string, ActiveSessionEntry>;
+  const pruned = await pruneDeadPIDs(parsed);
+  if (Object.keys(pruned).length !== Object.keys(parsed).length) {
+    await writeActiveJson(cwd, pruned);
+  }
+  return pruned;
+}
+
+export async function writeActiveJson(cwd: string, map: Record<string, ActiveSessionEntry>): Promise<void> {
+  await writeText(path.join(cwd, ACTIVE_SESSIONS_PATH), `${JSON.stringify(map, null, 2)}\n`);
+}
+
+export async function writeActiveEntry(cwd: string, uuid: string, sessionId: string, sourcePath: string): Promise<void> {
+  const active = await readActiveJson(cwd);
+  active[String(process.pid)] = {
+    spec_uuid: uuid,
+    session_id: sessionId,
+    source_spec_path: sourcePath,
+    started_at: new Date().toISOString(),
+  };
+  await writeActiveJson(cwd, active);
+}
+
+export async function loadActiveSession(cwd: string): Promise<{ state: RutaProjectState; sessionDir: string; active: ActiveSessionEntry } | null> {
+  const active = await readActiveJson(cwd);
+  const entry = active[String(process.pid)];
+  if (!entry) return null;
+  const sessionDir = path.join(cwd, ROUTA_DIR, entry.spec_uuid, entry.session_id);
+  const state = await loadProjectState(sessionDir);
+  if (!state) return null;
+  return { state, sessionDir, active: entry };
+}
+
+export async function listAllSessions(cwd: string): Promise<SessionListEntry[]> {
+  const rutaDir = path.join(cwd, ROUTA_DIR);
+  if (!(await pathExists(rutaDir))) return [];
+
+  const entries = await fs.readdir(rutaDir, { withFileTypes: true });
+  const sessions: SessionListEntry[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const uuid = entry.name;
+    const metaPath = path.join(rutaDir, uuid, SESSION_META_FILE);
+    if (!(await pathExists(metaPath))) continue;
+    const meta = JSON.parse(await readText(metaPath)) as SessionMeta;
+    for (const sessionId of meta.sessions) {
+      const sessionDir = path.join(rutaDir, uuid, sessionId);
+      const state = await loadProjectState(sessionDir);
+      if (!state) continue;
+      sessions.push({
+        uuid,
+        sessionId,
+        sourcePath: meta.source_spec_path,
+        mode: state.current_mode,
+        sessionDir,
+      });
+    }
+  }
+  return sessions;
+}
+
+export function artifactPaths(dirPath: string) {
+  if (isSessionDir(dirPath)) {
+    return {
+      specDir: dirPath,
+      stateDir: dirPath,
+      chavrutaDir: path.join(dirPath, "chavruta"),
+      comments: path.join(dirPath, "comments.json"),
+      notebook: path.join(dirPath, "notebook.md"),
+      glossary: path.join(dirPath, "glossary.md"),
+      propositions: path.join(dirPath, "propositions.md"),
+      properties: path.join(dirPath, "properties.md"),
+      contracts: path.join(dirPath, "contracts.md"),
+      gaps: path.join(dirPath, "gaps.md"),
+      perspectivesDir: path.join(dirPath, "perspectives"),
+      achDir: path.join(dirPath, "ach"),
+      premortem: path.join(dirPath, "premortem.md"),
+      synthesis: path.join(dirPath, "synthesis.md"),
+    };
+  }
+
   return {
-    specDir: path.join(cwd, "spec"),
-    stateDir: path.join(cwd, ROUTA_DIR),
-    chavrutaDir: path.join(cwd, ROUTA_DIR, "chavruta"),
-    comments: path.join(cwd, COMMENTS_PATH),
-    notebook: path.join(cwd, "notebook.md"),
-    glossary: path.join(cwd, "glossary.md"),
-    propositions: path.join(cwd, "propositions.md"),
-    properties: path.join(cwd, "properties.md"),
-    contracts: path.join(cwd, "contracts.md"),
-    gaps: path.join(cwd, "gaps.md"),
-    perspectivesDir: path.join(cwd, "perspectives"),
-    achDir: path.join(cwd, "ach"),
-    premortem: path.join(cwd, "premortem.md"),
-    synthesis: path.join(cwd, "synthesis.md"),
+    specDir: path.join(dirPath, "spec"),
+    stateDir: path.join(dirPath, ROUTA_DIR),
+    chavrutaDir: path.join(dirPath, ROUTA_DIR, "chavruta"),
+    comments: path.join(dirPath, COMMENTS_PATH),
+    notebook: path.join(dirPath, "notebook.md"),
+    glossary: path.join(dirPath, "glossary.md"),
+    propositions: path.join(dirPath, "propositions.md"),
+    properties: path.join(dirPath, "properties.md"),
+    contracts: path.join(dirPath, "contracts.md"),
+    gaps: path.join(dirPath, "gaps.md"),
+    perspectivesDir: path.join(dirPath, "perspectives"),
+    achDir: path.join(dirPath, "ach"),
+    premortem: path.join(dirPath, "premortem.md"),
+    synthesis: path.join(dirPath, "synthesis.md"),
   };
 }
 
@@ -169,6 +310,7 @@ export async function scaffoldProject(cwd: string, sourceSpecPath: string, discl
   const state: RutaProjectState = {
     schema_version: "0.2",
     spec_path: path.relative(cwd, targetSpec),
+    source_spec_path: path.relative(cwd, absSource),
     spec_hash: await computeSpecHash(targetSpec),
     spec_hash_canonicalization: "nfc-lf-trim-v1",
     current_mode: "read",
@@ -190,6 +332,55 @@ export async function scaffoldProject(cwd: string, sourceSpecPath: string, discl
   await writeIfMissing(paths.properties, "# Properties\n\n");
   await writeIfMissing(paths.contracts, "# Contracts\n\n");
   await writeIfMissing(paths.gaps, "# Gaps\n\n");
+  await writeIfMissing(path.join(paths.perspectivesDir, "security.md"), "# Security perspective\n\n");
+  await writeIfMissing(path.join(paths.perspectivesDir, "operator.md"), "# Operator perspective\n\n");
+  await writeIfMissing(path.join(paths.perspectivesDir, "downstream.md"), "# Downstream perspective\n\n");
+  await writeIfMissing(path.join(paths.perspectivesDir, "skeptic.md"), "# Skeptic perspective\n\n");
+  await writeIfMissing(path.join(paths.perspectivesDir, "junior.md"), "# Junior perspective\n\n");
+  await writeIfMissing(paths.premortem, "# Premortem\n\n");
+  await writeIfMissing(paths.synthesis, "# Synthesis\n\n");
+  return state;
+}
+
+export async function scaffoldSession(cwd: string, sourceSpecPath: string, sessionDir: string): Promise<RutaProjectState> {
+  const absSource = path.resolve(cwd, sourceSpecPath);
+  const specBasename = path.basename(absSource);
+  const paths = artifactPaths(sessionDir);
+
+  await ensureDir(paths.stateDir);
+  await ensureDir(paths.chavrutaDir);
+  await ensureDir(paths.perspectivesDir);
+  await ensureDir(paths.achDir);
+
+  const targetSpec = path.join(sessionDir, specBasename);
+  await writeText(targetSpec, await readText(absSource));
+
+  const promptBundleHash = await loadPromptBundleHash(cwd);
+  const state: RutaProjectState = {
+    schema_version: "0.2",
+    spec_path: path.basename(targetSpec),
+    source_spec_path: path.relative(cwd, absSource),
+    spec_hash: await computeSpecHash(targetSpec),
+    spec_hash_canonicalization: "nfc-lf-trim-v1",
+    current_mode: "read",
+    unity_sentence: null,
+    mode_history: [{ mode: "read", entered_at: new Date().toISOString() }],
+    gates: {
+      read_unlocked: false,
+      glossary_unlocked: false,
+      reimplement_unlocked: false,
+    },
+    prompt_bundle_hash: promptBundleHash,
+  };
+
+  await saveProjectState(sessionDir, state);
+  await writeIfMissing(paths.notebook, "# Notebook\n\n- " + timestampPrefix() + " Things I don't know yet:\n");
+  await writeIfMissing(paths.glossary, "# Glossary\n\n");
+  await writeIfMissing(paths.propositions, "# Propositions\n\n");
+  await writeIfMissing(paths.properties, "# Properties\n\n");
+  await writeIfMissing(paths.contracts, "# Contracts\n\n");
+  await writeIfMissing(paths.gaps, "# Gaps\n\n");
+  await writeIfMissing(paths.comments, "[]\n");
   await writeIfMissing(path.join(paths.perspectivesDir, "security.md"), "# Security perspective\n\n");
   await writeIfMissing(path.join(paths.perspectivesDir, "operator.md"), "# Operator perspective\n\n");
   await writeIfMissing(path.join(paths.perspectivesDir, "downstream.md"), "# Downstream perspective\n\n");
