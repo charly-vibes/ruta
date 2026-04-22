@@ -1,0 +1,1 @@
+Verified ruta-4hm.3 was already implemented: alt+c persists anchored comments to .ruta/comments.json, /ruta-comments lists them, comments survive viewer reopen/restart, and the spec file remains unchanged. Closed out after confirming targeted and full test suites pass.

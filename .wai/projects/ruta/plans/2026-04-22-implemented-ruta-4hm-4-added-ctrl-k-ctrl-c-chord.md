@@ -1,0 +1,1 @@
+Implemented ruta-4hm.4: added ctrl+k ctrl+c chord handling inside the custom spec viewer, ]/[ comment navigation, status/keybinding hints, and explicitly deferred edit/delete flows in README. Added regression tests for chord success, chord reset, and navigation.
