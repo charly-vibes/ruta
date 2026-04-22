@@ -1,5 +1,20 @@
 import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 
+function wrapLine(line: string, width: number): string[] {
+  if (width <= 0 || line.length <= width) return [line];
+  const chunks: string[] = [];
+  let remaining = line;
+  while (remaining.length > width) {
+    // prefer breaking at a space
+    let breakAt = remaining.lastIndexOf(" ", width);
+    if (breakAt <= 0) breakAt = width;
+    chunks.push(remaining.slice(0, breakAt));
+    remaining = remaining.slice(breakAt).replace(/^ /, "");
+  }
+  if (remaining.length > 0) chunks.push(remaining);
+  return chunks;
+}
+
 export function makeTextViewerFrame(
   content: string,
   options: { scrollTop: number; bodyHeight: number; width: number },
@@ -8,13 +23,14 @@ export function makeTextViewerFrame(
   const bodyHeight = Math.max(1, options.bodyHeight);
   const maxScrollTop = Math.max(1, lines.length - bodyHeight + 1);
   const scrollTop = Math.max(1, Math.min(options.scrollTop, maxScrollTop));
-  return lines
-    .slice(scrollTop - 1, scrollTop - 1 + bodyHeight)
-    .map((line) => truncateToWidth(line, Math.max(0, options.width)));
+  const wrappedLines = lines.flatMap((line) => wrapLine(line, options.width));
+  const maxScrollTopWrapped = Math.max(1, wrappedLines.length - bodyHeight + 1);
+  const clampedScrollTop = Math.max(1, Math.min(scrollTop, maxScrollTopWrapped));
+  return wrappedLines.slice(clampedScrollTop - 1, clampedScrollTop - 1 + bodyHeight);
 }
 
 class RutaTextViewer {
-  private readonly lines: string[];
+  private readonly rawLines: string[];
   private scrollTop = 1;
 
   constructor(
@@ -24,12 +40,14 @@ class RutaTextViewer {
     content: string,
     private readonly done: (value: undefined) => void,
   ) {
-    this.lines = content.split("\n");
+    this.rawLines = content.split("\n");
   }
 
   handleInput(data: string): void {
+    const width = process.stdout.columns ?? 80;
     const bodyHeight = this.bodyHeight();
-    const maxScrollTop = Math.max(1, this.lines.length - bodyHeight + 1);
+    const wrapped = this.rawLines.flatMap((l) => wrapLine(l, width));
+    const maxScrollTop = Math.max(1, wrapped.length - bodyHeight + 1);
 
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter) || data === "q") {
       this.done(undefined);
@@ -49,19 +67,21 @@ class RutaTextViewer {
 
   render(width: number): string[] {
     const bodyHeight = this.bodyHeight();
-    const frame = makeTextViewerFrame(this.lines.join("\n"), {
-      scrollTop: this.scrollTop,
-      bodyHeight,
-      width,
-    });
+    const wrapped = this.rawLines.flatMap((l) => wrapLine(l, width));
+    const maxScrollTop = Math.max(1, wrapped.length - bodyHeight + 1);
+    const clampedScrollTop = Math.max(1, Math.min(this.scrollTop, maxScrollTop));
+    const frame = wrapped.slice(clampedScrollTop - 1, clampedScrollTop - 1 + bodyHeight);
 
-    const maxScrollTop = Math.max(1, this.lines.length - bodyHeight + 1);
+    const canScroll = maxScrollTop > 1;
+    const hint = canScroll
+      ? "↑↓ scroll • pgup/pgdn • home/end • enter/esc/q close"
+      : "enter/esc/q close";
 
     return [
       truncateToWidth(this.theme.fg("accent", this.theme.bold(this.title)), width),
-      truncateToWidth(this.theme.fg("dim", "↑↓ scroll • pgup/pgdn • home/end • enter/esc/q close"), width),
+      truncateToWidth(this.theme.fg("dim", hint), width),
       ...frame,
-      truncateToWidth(this.theme.fg("muted", `lines ${Math.min(this.scrollTop, this.lines.length)}-${Math.min(this.scrollTop + bodyHeight - 1, this.lines.length)} of ${this.lines.length} • scroll ${this.scrollTop}/${maxScrollTop}`), width),
+      truncateToWidth(this.theme.fg("muted", `lines ${clampedScrollTop}-${Math.min(clampedScrollTop + bodyHeight - 1, wrapped.length)} of ${wrapped.length}`), width),
     ];
   }
 
@@ -69,7 +89,7 @@ class RutaTextViewer {
 
   private bodyHeight(): number {
     const rows = process.stdout.rows ?? 24;
-    return Math.max(6, rows - 4);
+    return Math.max(6, Math.min(rows - 4, 20));
   }
 }
 
