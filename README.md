@@ -76,15 +76,18 @@ Then inside pi:
 
 ```text
 /ruta-init examples/specs/ruta-spec-v0.2.md
+/ruta-tutorial
 /ruta-open-spec
 /ruta-open-spec Goals
 /ruta-comments
 /ruta-note ...
 /ruta-unity ...
 /ruta-done-reading
+/ruta-tutorial
 /ruta-add-term Connection
 /ruta-test Connection
 /ruta-done-glossary
+/ruta-tutorial
 /ruta-probe "Mode contract: reimplement"
 /ruta-add-gap
 ```
@@ -129,6 +132,13 @@ The script copies the tracked scenario inputs into a fresh commit-scoped run dir
 ```
 
 The viewer is read-only in v1 and never writes into `spec/`. Comments are stored separately in `.ruta/comments.json`. Comment edit/delete flows are intentionally deferred for now.
+
+## Onboarding
+
+If you are unsure what to do next, run `/ruta-tutorial`.
+It works both before and after `/ruta-init`:
+- before init, it explains the workflow and how to start
+- after init, it becomes mode-aware and lists only the commands that make sense right now
 
 ## Notes
 

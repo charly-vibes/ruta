@@ -49,6 +49,8 @@ import { openSpecViewer } from "./spec-viewer.ts";
 import { openTriageView } from "./triage.ts";
 import { detectDisagreement, formatDisagreementReport, selectSecondaryModel } from "./disagree.ts";
 import { detectPromptOverrides } from "./prompt-integrity.ts";
+import { buildTutorialText } from "./tutorial.ts";
+import { openTextViewer } from "./text-viewer.ts";
 
 const WHY_TEXT = `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you have to form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities, but it must not resolve them for you.`;
 
@@ -174,7 +176,7 @@ export default function ruta(pi: ExtensionAPI) {
   }
 
   async function showScratch(ctx: any, title: string, content: string) {
-    await ctx.ui.editor(title, content);
+    await openTextViewer(ctx, title, content);
   }
 
   function makeTriageToken(): string {
@@ -399,6 +401,14 @@ export default function ruta(pi: ExtensionAPI) {
         `- unity sentence: ${state.unity_sentence ?? "(missing)"}`,
       ].join("\n");
       await showScratch(ctx, "ruta status", summary);
+    },
+  });
+
+  pi.registerCommand("ruta-tutorial", {
+    description: "Show a mode-aware onboarding guide for the current ruta workflow",
+    handler: async (_args, ctx) => {
+      const state = await loadProjectState(ctx.cwd);
+      await showScratch(ctx, "ruta tutorial", buildTutorialText(state));
     },
   });
 

@@ -1,0 +1,1 @@
+Need onboarding/tutorial support and tighter skill scoping. Investigated current command surface, packaged mode skills, and existing ruta spec. Planning an OpenSpec change for /ruta-tutorial plus clearer mode-scoped skill guardrails so users know the next valid actions in each mode.

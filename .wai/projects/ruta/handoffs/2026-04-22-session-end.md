@@ -35,8 +35,17 @@ phase: implement
 ### git_status
 
 ```
-?? .wai/projects/ruta/plans/2026-04-22-implemented-ruta-4hm-4-added-ctrl-k-ctrl-c-chord.md
-?? .wai/projects/ruta/plans/2026-04-22-verified-ruta-4hm-3-was-already-implemented-alt-c.md
+ M .wai/PLUGINS.md
+ M README.md
+ M extensions/ruta.ts
+ M skills/glossary/SKILL.md
+ M skills/read/SKILL.md
+ M skills/reimplement/SKILL.md
+?? .wai/projects/ruta/plans/2026-04-22-need-onboarding-tutorial-support-and-tighter-skill.md
+?? .wai/projects/ruta/plans/2026-04-22-starting-implementation-for-ruta-tutorial-with-td.md
+?? extensions/tutorial.ts
+?? openspec/changes/add-ruta-tutorial-and-tighten-skill-scoping/
+?? test/tutorial.test.ts
 ```
 
 ### open_issues
