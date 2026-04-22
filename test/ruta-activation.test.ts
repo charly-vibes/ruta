@@ -4,7 +4,7 @@ import test from 'node:test';
 import { access, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import ruta from '../extensions/ruta';
-import { computeSpecUUID, scaffoldProject, scaffoldSession, writeText } from '../extensions/state';
+import { computeSpecUUID, scaffoldProject, scaffoldSession, writeActiveEntry, writeText } from '../extensions/state';
 
 type Listener = (event: any, ctx: any) => Promise<any> | any;
 
@@ -73,7 +73,10 @@ test('ruta guardrails are inactive on session start until explicitly started', a
   const dir = await mkdtemp(path.join(tmpdir(), 'ruta-activation-'));
   await writeText(path.join(dir, 'prompts-version.txt'), 'prompt-hash\n');
   await writeText(path.join(dir, 'spec.md'), '# Spec\n\nBody\n');
-  await scaffoldProject(dir, 'spec.md', true);
+  const uuid = computeSpecUUID(dir, 'spec.md');
+  const sessionDir = path.join(dir, '.ruta', uuid, 'session-1');
+  await scaffoldSession(dir, 'spec.md', sessionDir);
+  await writeActiveEntry(dir, uuid, 'session-1', 'spec.md');
 
   const fake = makeFakePi();
   ruta(fake.api as any);
@@ -303,7 +306,10 @@ test('ruta commands do not implicitly reactivate guardrails after /ruta-exit', a
   const dir = await mkdtemp(path.join(tmpdir(), 'ruta-activation-exit-'));
   await writeText(path.join(dir, 'prompts-version.txt'), 'prompt-hash\n');
   await writeText(path.join(dir, 'spec.md'), '# Spec\n\nBody\n');
-  await scaffoldProject(dir, 'spec.md', true);
+  const uuid = computeSpecUUID(dir, 'spec.md');
+  const sessionDir = path.join(dir, '.ruta', uuid, 'session-1');
+  await scaffoldSession(dir, 'spec.md', sessionDir);
+  await writeActiveEntry(dir, uuid, 'session-1', 'spec.md');
 
   const fake = makeFakePi();
   ruta(fake.api as any);
