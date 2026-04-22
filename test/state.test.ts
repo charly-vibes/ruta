@@ -3,22 +3,27 @@ import test from 'node:test';
 import { canonicalizeSpec } from './test-helpers';
 import {
   appendSpecComment,
+  computeSpecUUID,
   createSpecComment,
   createTriageToken,
   deriveSpecCommentAnchor,
   getSpecSectionByRef,
   glossaryGateSatisfied,
   isValidTriageToken,
+  listAllSessions,
   listSpecComments,
+  loadActiveSession,
+  readActiveJson,
   readGateSatisfied,
   readSpecComments,
   reimplementGateSatisfied,
   stripMarkdownFormatting,
   writeSpecComments,
+  type RutaProjectState,
   type SpecComment,
 } from '../extensions/state';
 import { composeSystemPrompt, BASE_PROMPT } from '../extensions/prompts';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -96,6 +101,144 @@ test('glossaryGateSatisfied requires a non-empty paraphrase block', async () => 
     'utf8',
   );
   assert.equal(await glossaryGateSatisfied(glossary), true);
+});
+
+test('computeSpecUUID is deterministic for the same resolved path', () => {
+  assert.equal(
+    computeSpecUUID('/workspace/project', './specs/example.md'),
+    computeSpecUUID('/workspace/project', 'specs/example.md'),
+  );
+});
+
+test('computeSpecUUID differs for different spec paths', () => {
+  assert.notEqual(
+    computeSpecUUID('/workspace/project', 'specs/example-a.md'),
+    computeSpecUUID('/workspace/project', 'specs/example-b.md'),
+  );
+});
+
+test('readActiveJson prunes dead pid entries and preserves live ones', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-active-json-'));
+  await mkdir(path.join(dir, '.ruta'), { recursive: true });
+  await writeFile(
+    path.join(dir, '.ruta', 'active.json'),
+    `${JSON.stringify({
+      [String(process.pid)]: {
+        spec_uuid: 'live-spec',
+        session_id: 'session-1',
+        source_spec_path: 'specs/live.md',
+        started_at: '2026-04-22T00:00:00.000Z',
+      },
+      ['99999999']: {
+        spec_uuid: 'dead-spec',
+        session_id: 'session-2',
+        source_spec_path: 'specs/dead.md',
+        started_at: '2026-04-22T00:00:00.000Z',
+      },
+    }, null, 2)}\n`,
+    'utf8',
+  );
+
+  const active = await readActiveJson(dir);
+
+  assert.deepEqual(Object.keys(active), [String(process.pid)]);
+  const persisted = JSON.parse(await readFile(path.join(dir, '.ruta', 'active.json'), 'utf8')) as Record<string, unknown>;
+  assert.deepEqual(Object.keys(persisted), [String(process.pid)]);
+});
+
+test('loadActiveSession returns null when there is no active session', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-load-active-none-'));
+  assert.equal(await loadActiveSession(dir), null);
+});
+
+test('loadActiveSession returns state and sessionDir for current pid entry', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-load-active-'));
+  const uuid = 'abc123def4567890';
+  const sessionId = 'session-2';
+  const sessionDir = path.join(dir, '.ruta', uuid, sessionId);
+  await mkdir(sessionDir, { recursive: true });
+
+  const state: RutaProjectState = {
+    schema_version: '0.2',
+    spec_path: 'spec/spec.md',
+    source_spec_path: 'openspec/specs/ruta/spec.md',
+    spec_hash: 'sha256:test',
+    spec_hash_canonicalization: 'nfc-lf-trim-v1',
+    current_mode: 'glossary',
+    unity_sentence: 'A test unity sentence.',
+    mode_history: [{ mode: 'read', entered_at: '2026-04-22T00:00:00.000Z' }],
+    gates: { read_unlocked: true, glossary_unlocked: false, reimplement_unlocked: false },
+    prompt_bundle_hash: 'prompt-hash',
+  };
+
+  await writeFile(path.join(sessionDir, 'state.json'), `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  await mkdir(path.join(dir, '.ruta'), { recursive: true });
+  await writeFile(
+    path.join(dir, '.ruta', 'active.json'),
+    `${JSON.stringify({
+      [String(process.pid)]: {
+        spec_uuid: uuid,
+        session_id: sessionId,
+        source_spec_path: state.source_spec_path,
+        started_at: '2026-04-22T01:00:00.000Z',
+      },
+    }, null, 2)}\n`,
+    'utf8',
+  );
+
+  const loaded = await loadActiveSession(dir);
+
+  assert.ok(loaded);
+  assert.equal(loaded?.sessionDir, sessionDir);
+  assert.equal(loaded?.state.current_mode, 'glossary');
+  assert.equal(loaded?.active.session_id, sessionId);
+});
+
+test('listAllSessions enumerates session directories and ignores missing ones', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-list-sessions-'));
+  const rutaDir = path.join(dir, '.ruta');
+  const uuidA = 'aaaaaaaaaaaaaaaa';
+  const uuidB = 'bbbbbbbbbbbbbbbb';
+
+  await mkdir(path.join(rutaDir, uuidA, 'session-1'), { recursive: true });
+  await mkdir(path.join(rutaDir, uuidB, 'session-3'), { recursive: true });
+
+  await writeFile(
+    path.join(rutaDir, uuidA, 'meta.json'),
+    `${JSON.stringify({ source_spec_path: 'specs/a.md', sessions: ['session-1', 'session-2'] }, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    path.join(rutaDir, uuidB, 'meta.json'),
+    `${JSON.stringify({ source_spec_path: 'specs/b.md', sessions: ['session-3'] }, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    path.join(rutaDir, uuidA, 'session-1', 'state.json'),
+    `${JSON.stringify({ current_mode: 'read' }, null, 2)}\n`,
+    'utf8',
+  );
+  await writeFile(
+    path.join(rutaDir, uuidB, 'session-3', 'state.json'),
+    `${JSON.stringify({ current_mode: 'reimplement' }, null, 2)}\n`,
+    'utf8',
+  );
+
+  const sessions = await listAllSessions(dir);
+  sessions.sort((a, b) => a.uuid.localeCompare(b.uuid) || a.sessionId.localeCompare(b.sessionId));
+
+  assert.deepEqual(
+    sessions.map((session) => ({
+      uuid: session.uuid,
+      sessionId: session.sessionId,
+      sourcePath: session.sourcePath,
+      mode: session.mode,
+    })),
+    [
+      { uuid: uuidA, sessionId: 'session-1', sourcePath: 'specs/a.md', mode: 'read' },
+      { uuid: uuidB, sessionId: 'session-3', sourcePath: 'specs/b.md', mode: 'reimplement' },
+    ],
+  );
 });
 
 test('writeSpecComments round-trips comment data', async () => {
