@@ -37,8 +37,9 @@ test('buildTutorialText for read mode lists only read-stage commands and next ac
   assert.ok(text.includes('/ruta-unity'));
   assert.ok(text.includes('/ruta-done-reading'));
   assert.ok(text.includes('/ruta-tutorial'));
-  assert.ok(!text.includes('/ruta-test'));
-  assert.ok(!text.includes('/ruta-probe'));
+  // /ruta-test and /ruta-probe appear in the shared Key concepts section (as illustrations), not in "Commands to use now"
+  assert.ok(!text.includes('- /ruta-test'));
+  assert.ok(!text.includes('- /ruta-probe'));
   assert.ok(text.toLowerCase().includes('next recommended action'));
 });
 
@@ -48,8 +49,9 @@ test('buildTutorialText for glossary mode points to paraphrase workflow', () => 
   assert.ok(text.includes('/ruta-add-term'));
   assert.ok(text.includes('/ruta-test'));
   assert.ok(text.includes('/ruta-done-glossary'));
-  assert.ok(!text.includes('/ruta-note'));
-  assert.ok(!text.includes('/ruta-probe'));
+  assert.ok(!text.includes('- /ruta-note'));
+  // /ruta-probe appears in Key concepts section (as illustration), not in "Commands to use now"
+  assert.ok(!text.includes('- /ruta-probe'));
   assert.ok(text.toLowerCase().includes('paraphrase'));
 });
 
@@ -65,6 +67,7 @@ test('buildTutorialText for reimplement mode points to gap discovery workflow', 
   assert.ok(text.includes('/ruta-done-reimplement'));
   assert.ok(text.includes('scope: Goals, Non-goals'));
   assert.ok(!text.includes('/ruta-note'));
-  assert.ok(!text.includes('/ruta-test'));
+  // /ruta-test appears in the shared Key concepts section (as an illustration), but not in the "Commands to use now" list
+  assert.ok(!text.includes('- /ruta-test'));
   assert.ok(text.toLowerCase().includes('ambigu'));
 });

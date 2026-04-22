@@ -53,7 +53,12 @@ import { detectPromptOverrides } from "./prompt-integrity.ts";
 import { buildTutorialText } from "./tutorial.ts";
 import { openTextViewer } from "./text-viewer.ts";
 
-const WHY_TEXT = `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you have to form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities, but it must not resolve them for you.`;
+const WHY_TEXT: Record<string, string> = {
+  read: `Read mode: AI is fully restricted so that your unity sentence and ignorance list come from you, not from a summary. If the AI reads for you, you form no mental model — only the appearance of one. Mortimer Adler's test: you haven't understood an argument until you can restate it in your own words without quoting the source. Use /ruta-note to capture observations and questions. Use /ruta-unity when you can state in one sentence what the spec is trying to accomplish.`,
+  glossary: `Glossary mode: AI is narrowed so it can test a paraphrase without writing one for you. The gap between "I know what this means" and "I can define it myself" is where most comprehension failures hide. /ruta-add-term scaffolds an entry for you to fill in. /ruta-test checks whether your paraphrase actually matches how the spec uses the term — it does not write the definition for you.`,
+  reimplement: `Reimplement mode: AI can scan a section for implementation gaps, but it must not resolve them. A gap is a decision the spec leaves silent, ambiguous, or forced — something you would have to decide when building. Surfacing gaps now is the point. Resolving them now would skip the architecture conversation. Use /ruta-probe <section> to find gaps. Use /ruta-add-gap to record ones you spot manually.`,
+  default: `ruta exists to keep AI from substituting fluency for comprehension. The restrictions are not missing features; they are the product. In read mode, AI is disabled so you form your own unity sentence and ignorance list. In glossary mode, AI is narrowed so it can test a paraphrase without writing one for you. In reimplement mode, AI can surface ambiguities but must not resolve them for you.`,
+};
 
 export default function ruta(pi: ExtensionAPI) {
   let triageState: TriageToken | null = null;
@@ -449,7 +454,9 @@ export default function ruta(pi: ExtensionAPI) {
   pi.registerCommand("ruta-why", {
     description: "Explain why ruta restricts AI in the current mode",
     handler: async (_args, ctx) => {
-      await showScratch(ctx, "ruta why", WHY_TEXT);
+      const state = await loadProjectState(ctx.cwd);
+      const text = state ? (WHY_TEXT[state.current_mode] ?? WHY_TEXT.default) : WHY_TEXT.default;
+      await showScratch(ctx, "ruta why", text);
     },
   });
 
@@ -471,13 +478,13 @@ export default function ruta(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("ruta-unity", {
-    description: "Set the unity sentence in .ruta/ruta.json",
+    description: "Record your one-sentence summary of what the spec is trying to accomplish (Adler's test: restate it before you critique it)",
     handler: async (args, ctx) => {
       const state = await loadStateOrNotify(ctx.cwd, ctx);
       if (!state) return;
       const sentence = args.trim();
       if (!sentence) {
-        ctx.ui.notify("Usage: /ruta-unity <sentence>", "error");
+        ctx.ui.notify("Usage: /ruta-unity <sentence>  —  A unity sentence states what the spec is trying to accomplish, in your own words.", "error");
         return;
       }
       const next = { ...state, unity_sentence: sentence };
@@ -511,7 +518,7 @@ export default function ruta(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("ruta-test", {
-    description: "Run the paraphrase-adequacy probe for a glossary term",
+    description: "Check whether your paraphrase of a glossary term matches how the spec actually uses it (does not write the definition for you)",
     handler: async (args, ctx) => {
       const state = await loadStateOrNotify(ctx.cwd, ctx);
       if (!state) return;
@@ -530,7 +537,7 @@ export default function ruta(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("ruta-scope", {
-    description: "Set or show the reimplementation scope",
+    description: "Narrow which sections to probe during reimplementation (useful when the spec is large and you want to focus on a chapter or section range)",
     handler: async (args, ctx) => {
       const state = await loadStateOrNotify(ctx.cwd, ctx);
       if (!state) return;
@@ -547,7 +554,7 @@ export default function ruta(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("ruta-probe", {
-    description: "Run a gap probe against a spec section",
+    description: "Scan a spec section for implementation gaps — decisions the spec leaves silent, ambiguous, or forced",
     handler: async (args, ctx) => {
       const state = await loadStateOrNotify(ctx.cwd, ctx);
       if (!state) return;
@@ -637,7 +644,7 @@ export default function ruta(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("ruta-disagree", {
-    description: "Re-run the latest user prompt against a secondary model and compare",
+    description: "Get a second opinion from a different AI model on the last response (model musical chairs: surfaces where two models diverge)",
     handler: async (_args, ctx) => {
       if (!ctx.model) {
         ctx.ui.notify("No active model selected", "error");

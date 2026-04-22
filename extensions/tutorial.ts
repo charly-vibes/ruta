@@ -58,6 +58,14 @@ function modeTutorial(state: RutaProjectState): ModeTutorial {
   };
 }
 
+const KEY_CONCEPTS = `## Key concepts
+
+- unity sentence — one sentence stating what the spec is trying to accomplish, in your own words. Mortimer Adler's test: you haven't understood an argument until you can restate it without quoting the source.
+- gap — an implementation decision the spec leaves silent, ambiguous, or forced. Something you would have to resolve when actually building this.
+- probe — an AI-assisted scan of one spec section that lists implementation gaps. The AI surfaces ambiguities; you decide whether to resolve them.
+- paraphrase-adequacy — whether your own definition of a term matches how the spec actually uses it. /ruta-test checks this without writing the definition for you.
+- gate — a checkpoint ruta uses before letting you advance to the next mode. Gates check that artifacts are non-empty, not that they are good.`;
+
 function formatModeBlock(mode: RutaMode, state: RutaProjectState, tutorial: ModeTutorial): string {
   const lines = [
     '# ruta tutorial',
@@ -87,6 +95,8 @@ function formatModeBlock(mode: RutaMode, state: RutaProjectState, tutorial: Mode
     '## Next recommended action',
     '',
     tutorial.nextAction,
+    '',
+    KEY_CONCEPTS,
   );
 
   return lines.join('\n');
@@ -98,19 +108,24 @@ export function buildTutorialText(state: RutaProjectState | null): string {
       '# ruta tutorial',
       '',
       'ruta is a mode-restricted workflow for learning a spec without outsourcing the understanding.',
+      'AI is restricted at each stage so you form your own mental model before the assistant fills in the gaps.',
       '',
       '## Start here',
       '',
       '- Run /ruta-init <spec-path> in a directory that contains the spec you want to study.',
-      '- ruta will create file-backed artifacts like notebook.md, glossary.md, and gaps.md.',
+      '- ruta will create file-backed artifacts: notebook.md (your notes), glossary.md (your term definitions), gaps.md (implementation ambiguities).',
       '',
-      '## Workflow',
+      '## Three-mode workflow',
       '',
-      '- read — read the spec yourself, take notes, and write the unity sentence',
-      '- glossary — define important terms and test your own paraphrases',
-      '- reimplement — surface ambiguities and forced decisions without resolving them too early',
+      '1. read — read the spec yourself, take notes in notebook.md, write a unity sentence (one sentence: what is this spec trying to accomplish?)',
+      '2. glossary — define important terms in your own words, then test whether your paraphrases hold up',
+      '3. reimplement — scan sections for gaps: decisions the spec leaves silent, ambiguous, or forced',
+      '',
+      'Each mode has a gate. You advance when the artifact for that mode is non-empty.',
       '',
       'After initialization, run /ruta-tutorial again to get mode-specific next steps.',
+      '',
+      KEY_CONCEPTS,
     ].join('\n');
   }
 
