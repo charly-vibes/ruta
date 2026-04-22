@@ -60,6 +60,11 @@ import { detectPromptOverrides } from "./prompt-integrity.ts";
 import { buildHelpText, buildTutorialText, HELP_TOPIC_KEYS } from "./tutorial.ts";
 import { openTextViewer } from "./text-viewer.ts";
 
+const NO_SESSIONS_MESSAGE = "No sessions yet. Run `/ruta-init <path>` to start.";
+const PICK_SESSION_PROMPT = "Pick a session: ";
+const NETWORK_DISCLOSURE_TITLE = "ruta network disclosure";
+const NETWORK_DISCLOSURE_MESSAGE = "Spec contents will be sent to your configured LLM provider(s) during paraphrase tests and gap probes. ruta cannot control provider-side logging, retention, or training use. Continue?";
+
 const WHY_TEXT: Record<string, string> = {
   read: `Read mode: AI is fully restricted so that your unity sentence and ignorance list come from you, not from a summary. If the AI reads for you, you form no mental model — only the appearance of one. Mortimer Adler's test: you haven't understood an argument until you can restate it in your own words without quoting the source. Use /ruta-note to capture observations and questions. Use /ruta-unity when you can state in one sentence what the spec is trying to accomplish.`,
   glossary: `Glossary mode: AI is narrowed so it can test a paraphrase without writing one for you. The gap between "I know what this means" and "I can define it myself" is where most comprehension failures hide. /ruta-add-term scaffolds an entry for you to fill in. /ruta-probe-term checks whether your paraphrase actually matches how the spec uses the term — it does not write the definition for you.`,
@@ -81,6 +86,55 @@ export default function ruta(pi: ExtensionAPI) {
       return null;
     }
     return { state: active.state, sessionDir: active.sessionDir };
+  }
+
+  async function completePathArgument(prefix: string) {
+    try {
+      const cwd = process.cwd();
+      let dir: string;
+      let namePrefix: string;
+      let pathPrefix: string;
+      if (prefix.endsWith("/")) {
+        dir = path.join(cwd, prefix);
+        namePrefix = "";
+        pathPrefix = prefix;
+      } else if (prefix === "") {
+        dir = cwd;
+        namePrefix = "";
+        pathPrefix = "";
+      } else {
+        const parts = prefix.split("/");
+        namePrefix = parts.pop()!;
+        pathPrefix = parts.length > 0 ? parts.join("/") + "/" : "";
+        dir = pathPrefix === "" ? cwd : path.join(cwd, pathPrefix);
+      }
+      const entries = await readdir(dir, { withFileTypes: true });
+      const items = [];
+      for (const entry of entries) {
+        if (namePrefix && !entry.name.startsWith(namePrefix)) continue;
+        const isDir = entry.isDirectory();
+        const value = pathPrefix + entry.name + (isDir ? "/" : "");
+        items.push({ value, label: entry.name + (isDir ? "/" : "") });
+      }
+      return items.length > 0 ? items : null;
+    } catch {
+      return null;
+    }
+  }
+
+  async function confirmNetworkDisclosure(ctx: any): Promise<boolean> {
+    return ctx.ui.confirm(NETWORK_DISCLOSURE_TITLE, NETWORK_DISCLOSURE_MESSAGE);
+  }
+
+  async function promptForSessionSelection(ctx: any, cwd: string) {
+    const sessions = await listAllSessions(cwd);
+    if (sessions.length === 0) {
+      ctx.ui.notify(NO_SESSIONS_MESSAGE, "info");
+      return null;
+    }
+    ctx.ui.notify(sessions.map((session, index) => `[${index + 1}] ${session.sourcePath}  ${session.sessionId}  (mode: ${session.mode})`).join("\n"), "info");
+    const choice = Number((await ctx.ui.input(PICK_SESSION_PROMPT)).trim());
+    return sessions[choice - 1] ?? null;
   }
 
   function modePrompt(mode: RutaMode): string {
@@ -413,49 +467,14 @@ export default function ruta(pi: ExtensionAPI) {
 
   pi.registerCommand("ruta-init", {
     description: "Initialize a ruta project in the current directory",
-    getArgumentCompletions: async (prefix) => {
-      try {
-        const cwd = process.cwd();
-        let dir: string;
-        let namePrefix: string;
-        let pathPrefix: string;
-        if (prefix.endsWith("/")) {
-          dir = path.join(cwd, prefix);
-          namePrefix = "";
-          pathPrefix = prefix;
-        } else if (prefix === "") {
-          dir = cwd;
-          namePrefix = "";
-          pathPrefix = "";
-        } else {
-          const parts = prefix.split("/");
-          namePrefix = parts.pop()!;
-          pathPrefix = parts.length > 0 ? parts.join("/") + "/" : "";
-          dir = pathPrefix === "" ? cwd : path.join(cwd, pathPrefix);
-        }
-        const entries = await readdir(dir, { withFileTypes: true });
-        const items = [];
-        for (const entry of entries) {
-          if (namePrefix && !entry.name.startsWith(namePrefix)) continue;
-          const isDir = entry.isDirectory();
-          const value = pathPrefix + entry.name + (isDir ? "/" : "");
-          items.push({ value, label: entry.name + (isDir ? "/" : "") });
-        }
-        return items.length > 0 ? items : null;
-      } catch {
-        return null;
-      }
-    },
+    getArgumentCompletions: completePathArgument,
     handler: async (args, ctx) => {
       const specPath = args.trim();
       if (!specPath) {
         ctx.ui.notify("Usage: /ruta-init <spec-path>", "error");
         return;
       }
-      const disclosureAck = await ctx.ui.confirm(
-        "ruta network disclosure",
-        "Spec contents will be sent to your configured LLM provider(s) during paraphrase tests and gap probes. ruta cannot control provider-side logging, retention, or training use. Continue?",
-      );
+      const disclosureAck = await confirmNetworkDisclosure(ctx);
 
       const specUuid = computeSpecUUID(ctx.cwd, specPath);
       const specDir = path.join(ctx.cwd, ".ruta", specUuid);
@@ -515,44 +534,14 @@ export default function ruta(pi: ExtensionAPI) {
 
   pi.registerCommand("ruta-resume", {
     description: "Resume the latest ruta session for a spec or pick from existing sessions",
-    getArgumentCompletions: async (prefix) => {
-      try {
-        const cwd = process.cwd();
-        let dir: string;
-        let namePrefix: string;
-        let pathPrefix: string;
-        if (prefix.endsWith("/")) {
-          dir = path.join(cwd, prefix);
-          namePrefix = "";
-          pathPrefix = prefix;
-        } else if (prefix === "") {
-          dir = cwd;
-          namePrefix = "";
-          pathPrefix = "";
-        } else {
-          const parts = prefix.split("/");
-          namePrefix = parts.pop()!;
-          pathPrefix = parts.length > 0 ? parts.join("/") + "/" : "";
-          dir = pathPrefix === "" ? cwd : path.join(cwd, pathPrefix);
-        }
-        const entries = await readdir(dir, { withFileTypes: true });
-        return entries
-          .filter((entry) => !namePrefix || entry.name.startsWith(namePrefix))
-          .map((entry) => ({ value: pathPrefix + entry.name + (entry.isDirectory() ? "/" : ""), label: entry.name + (entry.isDirectory() ? "/" : "") }));
-      } catch {
-        return null;
-      }
-    },
+    getArgumentCompletions: completePathArgument,
     handler: async (args, ctx) => {
       const specPath = args.trim();
       if (specPath) {
         const specUuid = computeSpecUUID(ctx.cwd, specPath);
         const metaPath = path.join(ctx.cwd, ".ruta", specUuid, SESSION_META_FILE);
         if (!(await pathExists(metaPath))) {
-          await ctx.ui.confirm(
-            "ruta network disclosure",
-            "Spec contents will be sent to your configured LLM provider(s) during paraphrase tests and gap probes. ruta cannot control provider-side logging, retention, or training use. Continue?",
-          );
+          await confirmNetworkDisclosure(ctx);
           const sessionDir = path.join(ctx.cwd, ".ruta", specUuid, "session-1");
           const state = await scaffoldSession(ctx.cwd, specPath, sessionDir);
           const meta: SessionMeta = { source_spec_path: state.source_spec_path ?? specPath, sessions: ["session-1"] };
@@ -589,15 +578,9 @@ export default function ruta(pi: ExtensionAPI) {
         return;
       }
 
-      const sessions = await listAllSessions(ctx.cwd);
-      if (sessions.length === 0) {
-        ctx.ui.notify("No sessions yet. Run `/ruta-init <path>` to start.", "info");
-        return;
-      }
-      ctx.ui.notify(sessions.map((session, index) => `[${index + 1}] ${session.sourcePath}  ${session.sessionId}  (mode: ${session.mode})`).join("\n"), "info");
-      const choice = Number((await ctx.ui.input("Pick a session: ")).trim());
-      const picked = sessions[choice - 1];
+      const picked = await promptForSessionSelection(ctx, ctx.cwd);
       if (!picked) {
+        if ((await listAllSessions(ctx.cwd)).length === 0) return;
         ctx.ui.notify("Invalid session selection.", "error");
         return;
       }
@@ -616,15 +599,9 @@ export default function ruta(pi: ExtensionAPI) {
   pi.registerCommand("ruta-switch", {
     description: "Switch the current terminal to another ruta session",
     handler: async (_args, ctx) => {
-      const sessions = await listAllSessions(ctx.cwd);
-      if (sessions.length === 0) {
-        ctx.ui.notify("No sessions yet. Run `/ruta-init <path>` to start.", "info");
-        return;
-      }
-      ctx.ui.notify(sessions.map((session, index) => `[${index + 1}] ${session.sourcePath}  ${session.sessionId}  (mode: ${session.mode})`).join("\n"), "info");
-      const choice = Number((await ctx.ui.input("Pick a session: ")).trim());
-      const picked = sessions[choice - 1];
+      const picked = await promptForSessionSelection(ctx, ctx.cwd);
       if (!picked) {
+        if ((await listAllSessions(ctx.cwd)).length === 0) return;
         ctx.ui.notify("Invalid session selection.", "error");
         return;
       }
