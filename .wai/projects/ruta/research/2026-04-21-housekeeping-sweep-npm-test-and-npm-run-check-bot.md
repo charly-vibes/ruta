@@ -1,0 +1,1 @@
+Housekeeping sweep: npm test and npm run check both pass; working tree clean; wai doctor warns about missing README badge and 4 unimported skills outside .wai (3 repo skills plus one under node_modules example); root ruta-spec-v0.2.md duplicates spec/ruta-spec-v0.2.md byte-for-byte, which may be intentional for /ruta-init examples but is a documentation/structure ambiguity.

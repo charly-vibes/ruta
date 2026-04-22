@@ -1,0 +1,1 @@
+Implemented ruta-4hm.3: added viewer-side alt+c comment creation with persisted .ruta/comments.json anchors, comment gutter markers on reopen, sorted per-spec listing via /ruta-comments, and tests covering marker rendering plus viewer persistence without mutating spec/.

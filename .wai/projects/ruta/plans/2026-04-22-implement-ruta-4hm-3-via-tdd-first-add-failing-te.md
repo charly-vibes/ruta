@@ -1,0 +1,1 @@
+Implement ruta-4hm.3 via TDD: first add failing tests for comment ordering/filtering and viewer comment markers/metadata flow, then add comment persistence/listing helpers, then wire alt+c in spec viewer and /ruta-comments command, finishing with test suite + manual smoke notes.

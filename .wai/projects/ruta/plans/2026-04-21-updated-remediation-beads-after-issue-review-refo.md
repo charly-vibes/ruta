@@ -1,0 +1,1 @@
+Updated remediation beads after issue-review: reformatted descriptions, added epic done criteria, added manual verification steps, split triage behavior into ruta-wu1.7 for token lifecycle, and linked ruta-wu1.3 to ruta-wu1.5 and ruta-wu1.7 dependencies.

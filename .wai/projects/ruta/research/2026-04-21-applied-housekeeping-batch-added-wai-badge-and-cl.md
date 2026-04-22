@@ -1,0 +1,1 @@
+Applied housekeeping batch: added wai badge and clarified source-vs-initialized spec duplication in README; imported repo-local ruta skills into .wai/resources/agent-config/skills; removed local node_modules install so wai doctor no longer reports the example SKILL.md under dependencies. After cleanup, wai doctor reports 13 passed, 0 warnings.

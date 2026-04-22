@@ -1,0 +1,1 @@
+Created bd epic ruta-wu1 and remediation tickets ruta-wu1.1..ruta-wu1.6 from the 2026-04-21 Rule-of-5 implementation review. Tickets cover read-gate correctness, scope-aware reimplement gating, triage UI/token enforcement, /ruta-disagree spec compliance, section-resolution hardening, and prompt-override detection.
