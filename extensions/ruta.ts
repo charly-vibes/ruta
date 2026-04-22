@@ -878,14 +878,15 @@ export default function ruta(pi: ExtensionAPI) {
   pi.registerCommand("ruta-open-spec", {
     description: "Open the current spec in a read-only viewer",
     handler: async (args, ctx) => {
-      const state = await loadStateOrNotify(ctx.cwd, ctx);
-      if (!state) return;
+      const active = await loadStateOrNotify(ctx.cwd, ctx);
+      if (!active) return;
+      const { state, sessionDir } = active;
       if (!ctx.hasUI) {
         ctx.ui.notify("/ruta-open-spec requires interactive mode", "error");
         return;
       }
       try {
-        await openSpecViewer(ctx, ctx.cwd, state, args.trim() || undefined);
+        await openSpecViewer(ctx, sessionDir, state, args.trim() || undefined);
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }

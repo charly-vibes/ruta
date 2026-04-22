@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -284,6 +284,49 @@ test('openSpecViewer resets the comment chord when the second key is not ctrl+c'
 
   assert.equal(editorCalls, 0);
   assert.deepEqual(await readSpecComments(path.join(dir, '.ruta', 'comments.json')), []);
+});
+
+test('openSpecViewer uses session-local spec and comments paths', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-viewer-session-layout-'));
+  const sessionDir = path.join(dir, '.ruta', 'aaaaaaaaaaaaaaaa', 'session-1');
+  await mkdir(sessionDir, { recursive: true });
+  await writeFile(path.join(sessionDir, 'spec.md'), ['# Intro', 'opening'].join('\n'), 'utf8');
+
+  const state = { spec_path: 'spec.md', source_spec_path: 'specs/original.md' } as any;
+  let savedView: any = null;
+  const openPromise = openSpecViewer({
+    ui: {
+      notify: () => {},
+      custom: (factory: any) => new Promise<void>((resolve) => {
+        savedView = factory(
+          { requestRender: () => {} },
+          { fg: (_c: string, text: string) => text, bold: (text: string) => text },
+          {},
+          () => resolve(),
+        );
+      }),
+      editor: async () => 'Session local comment',
+    },
+  } as any, sessionDir, state);
+
+  for (let attempt = 0; attempt < 20 && !savedView; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(savedView, 'Viewer should open in custom UI');
+  savedView.handleInput('\u001bc');
+
+  let comments = [] as Awaited<ReturnType<typeof readSpecComments>>;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    comments = await readSpecComments(path.join(sessionDir, 'comments.json'));
+    if (comments.length === 1) break;
+  }
+
+  savedView.handleInput('q');
+  await openPromise;
+
+  assert.equal(comments.length, 1);
+  assert.equal(comments[0]?.specPath, 'spec.md');
 });
 
 test('openSpecViewer navigates to next and previous commented lines', async () => {

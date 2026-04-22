@@ -224,11 +224,11 @@ class RutaSpecViewer {
 
 export async function openSpecViewer(
   ctx: any,
-  cwd: string,
+  baseDir: string,
   state: RutaProjectState,
   section?: string,
 ): Promise<void> {
-  const specPath = path.join(cwd, state.spec_path);
+  const specPath = path.join(baseDir, state.spec_path);
   const specText = await readText(specPath);
   const resolved = findSpecLineForSection(specText, section);
   if (section && resolved === null) {
@@ -236,7 +236,7 @@ export async function openSpecViewer(
     return;
   }
   const initialLine = resolved ?? 1;
-  const commentsPath = artifactPaths(cwd).comments;
+  const commentsPath = artifactPaths(baseDir).comments;
   const initialComments = await listSpecComments(commentsPath, state.spec_path);
   await ctx.ui.custom((tui: any, theme: any, _keybindings: any, done: (value: undefined) => void) => (
     new RutaSpecViewer(
