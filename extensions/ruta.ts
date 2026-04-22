@@ -1,3 +1,4 @@
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { complete, type Message } from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -336,6 +337,39 @@ export default function ruta(pi: ExtensionAPI) {
 
   pi.registerCommand("ruta-init", {
     description: "Initialize a ruta project in the current directory",
+    getArgumentCompletions: async (prefix) => {
+      try {
+        const cwd = process.cwd();
+        let dir: string;
+        let namePrefix: string;
+        let pathPrefix: string;
+        if (prefix.endsWith("/")) {
+          dir = path.join(cwd, prefix);
+          namePrefix = "";
+          pathPrefix = prefix;
+        } else if (prefix === "") {
+          dir = cwd;
+          namePrefix = "";
+          pathPrefix = "";
+        } else {
+          const parts = prefix.split("/");
+          namePrefix = parts.pop()!;
+          pathPrefix = parts.length > 0 ? parts.join("/") + "/" : "";
+          dir = pathPrefix === "" ? cwd : path.join(cwd, pathPrefix);
+        }
+        const entries = await readdir(dir, { withFileTypes: true });
+        const items = [];
+        for (const entry of entries) {
+          if (namePrefix && !entry.name.startsWith(namePrefix)) continue;
+          const isDir = entry.isDirectory();
+          const value = pathPrefix + entry.name + (isDir ? "/" : "");
+          items.push({ value, label: entry.name + (isDir ? "/" : "") });
+        }
+        return items.length > 0 ? items : null;
+      } catch {
+        return null;
+      }
+    },
     handler: async (args, ctx) => {
       const specPath = args.trim();
       if (!specPath) {

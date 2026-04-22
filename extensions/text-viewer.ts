@@ -54,8 +54,8 @@ class RutaTextViewer {
       return;
     }
 
-    if (matchesKey(data, Key.up)) this.scrollTop = Math.max(1, this.scrollTop - 1);
-    else if (matchesKey(data, Key.down)) this.scrollTop = Math.min(maxScrollTop, this.scrollTop + 1);
+    if (matchesKey(data, Key.up) || data === "k") this.scrollTop = Math.max(1, this.scrollTop - 1);
+    else if (matchesKey(data, Key.down) || data === "j") this.scrollTop = Math.min(maxScrollTop, this.scrollTop + 1);
     else if (matchesKey(data, Key.pageUp)) this.scrollTop = Math.max(1, this.scrollTop - bodyHeight);
     else if (matchesKey(data, Key.pageDown)) this.scrollTop = Math.min(maxScrollTop, this.scrollTop + bodyHeight);
     else if (matchesKey(data, Key.home)) this.scrollTop = 1;
@@ -74,7 +74,7 @@ class RutaTextViewer {
 
     const canScroll = maxScrollTop > 1;
     const hint = canScroll
-      ? "↑↓ scroll • pgup/pgdn • home/end • enter/esc/q close"
+      ? "↑↓/jk scroll • pgup/pgdn • home/end • enter/esc/q close"
       : "enter/esc/q close";
 
     return [
