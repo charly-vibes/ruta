@@ -84,13 +84,14 @@ Then inside pi:
 /ruta-init ruta-spec-v0.2.md
 /ruta-open-spec
 # use ↑↓, pgup/pgdn, home/end
-# press alt+c to add a comment at the current line
+# press alt+c or ctrl+k ctrl+c to add a comment at the current line
+# use ] and [ to jump to next/previous commented lines
 # press enter, esc, or q to close
 /ruta-comments
 /ruta-open-spec Goals
 ```
 
-The viewer is read-only in v1 and never writes into `spec/`. Comments are stored separately in `.ruta/comments.json`.
+The viewer is read-only in v1 and never writes into `spec/`. Comments are stored separately in `.ruta/comments.json`. Comment edit/delete flows are intentionally deferred for now.
 
 ## Notes
 

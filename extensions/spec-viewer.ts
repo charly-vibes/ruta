@@ -81,6 +81,7 @@ class RutaSpecViewer {
   private comments: SpecComment[];
   private statusMessage = "";
   private savingComment = false;
+  private pendingCommentChord = false;
 
   constructor(
     private readonly tui: { requestRender: () => void },
@@ -102,8 +103,24 @@ class RutaSpecViewer {
   handleInput(data: string): void {
     const bodyHeight = this.bodyHeight();
 
+    if (this.pendingCommentChord) {
+      this.pendingCommentChord = false;
+      if (matchesKey(data, Key.ctrl("c"))) {
+        if (!this.savingComment) void this.handleAddComment();
+        return;
+      }
+      this.statusMessage = "comment chord cancelled";
+      this.tui.requestRender();
+    }
+
     if (matchesKey(data, Key.alt("c"))) {
       if (!this.savingComment) void this.handleAddComment();
+      return;
+    }
+    if (matchesKey(data, Key.ctrl("k"))) {
+      this.pendingCommentChord = true;
+      this.statusMessage = "comment chord: press ctrl+c";
+      this.tui.requestRender();
       return;
     }
     if (this.savingComment) return;
@@ -111,7 +128,9 @@ class RutaSpecViewer {
       this.done(undefined);
       return;
     }
-    if (matchesKey(data, Key.up)) this.cursorLine = clamp(this.cursorLine - 1, 1, this.lines.length);
+    if (data === "]") this.jumpToComment("next");
+    else if (data === "[") this.jumpToComment("previous");
+    else if (matchesKey(data, Key.up)) this.cursorLine = clamp(this.cursorLine - 1, 1, this.lines.length);
     else if (matchesKey(data, Key.down)) this.cursorLine = clamp(this.cursorLine + 1, 1, this.lines.length);
     else if (matchesKey(data, Key.pageUp)) this.cursorLine = clamp(this.cursorLine - bodyHeight, 1, this.lines.length);
     else if (matchesKey(data, Key.pageDown)) this.cursorLine = clamp(this.cursorLine + bodyHeight, 1, this.lines.length);
@@ -136,7 +155,7 @@ class RutaSpecViewer {
 
     return [
       truncateToWidth(this.theme.fg("accent", this.theme.bold(this.title)), width),
-      truncateToWidth(this.theme.fg("dim", "↑↓ move • alt+c comment • pgup/pgdn scroll • home/end jump • enter/esc/q close"), width),
+      truncateToWidth(this.theme.fg("dim", "↑↓ move • alt+c or ctrl+k ctrl+c comment • [/] comments • pgup/pgdn • home/end • enter/esc/q close"), width),
       ...frame.map((line) => line.startsWith(">") ? this.theme.fg("accent", line) : line),
       truncateToWidth(this.theme.fg("muted", this.statusLine()), width),
     ];
@@ -167,8 +186,22 @@ class RutaSpecViewer {
   private statusLine(): string {
     const commentCount = this.comments.length;
     const commentText = `${commentCount} comment${commentCount === 1 ? "" : "s"}`;
-    const suffix = this.statusMessage ? ` • ${this.statusMessage}` : "";
+    const suffix = this.statusMessage ? ` • ${this.statusMessage}` : " • edit/delete deferred to a later task";
     return `line ${this.cursorLine}/${this.lines.length} • ${commentText}${suffix}`;
+  }
+
+  private jumpToComment(direction: "next" | "previous"): void {
+    const lines = [...new Set(this.comments.map((comment) => comment.line))].sort((a, b) => a - b);
+    if (lines.length === 0) {
+      this.statusMessage = "no comments in this spec";
+      return;
+    }
+
+    const target = direction === "next"
+      ? lines.find((line) => line > this.cursorLine) ?? lines[0]!
+      : [...lines].reverse().find((line) => line < this.cursorLine) ?? lines[lines.length - 1]!;
+    this.cursorLine = target;
+    this.statusMessage = `${direction === "next" ? "next" : "previous"} comment at line ${target}`;
   }
 
   private bodyHeight(): number {

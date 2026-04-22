@@ -9,6 +9,7 @@ import {
   makeSpecViewerFrame,
   openSpecViewer,
 } from '../extensions/spec-viewer';
+import { writeSpecComments } from '../extensions/state';
 import { readSpecComments } from '../extensions/state';
 
 test('findSpecLineForSection returns the matching heading line', () => {
@@ -198,4 +199,148 @@ test('openSpecViewer alt+c persists a comment and shows it after reopen', async 
   assert.ok(rendered.some((line: string) => line.includes('>* 1  # Intro')), 'Reopened viewer should show the persisted comment marker');
   reopenedView.handleInput('q');
   await reopenPromise;
+});
+
+test('openSpecViewer ctrl+k ctrl+c persists a comment chord inside the viewer', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-viewer-chord-'));
+  await writeFile(path.join(dir, 'spec.md'), ['# Intro', 'opening'].join('\n'), 'utf8');
+
+  const state = { spec_path: 'spec.md' } as any;
+  let savedView: any = null;
+  const openPromise = openSpecViewer({
+    ui: {
+      notify: () => {},
+      custom: (factory: any) => new Promise<void>((resolve) => {
+        savedView = factory(
+          { requestRender: () => {} },
+          { fg: (_c: string, text: string) => text, bold: (text: string) => text },
+          {},
+          () => resolve(),
+        );
+      }),
+      editor: async () => 'Chord-created comment',
+    },
+  } as any, dir, state);
+
+  for (let attempt = 0; attempt < 20 && !savedView; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(savedView, 'Viewer should open in custom UI');
+
+  savedView.handleInput('\u000b');
+  savedView.handleInput('\u0003');
+
+  let comments = [] as Awaited<ReturnType<typeof readSpecComments>>;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    comments = await readSpecComments(path.join(dir, '.ruta', 'comments.json'));
+    if (comments.length === 1) break;
+  }
+
+  savedView.handleInput('q');
+  await openPromise;
+
+  assert.equal(comments.length, 1);
+  assert.equal(comments[0]?.text, 'Chord-created comment');
+});
+
+test('openSpecViewer resets the comment chord when the second key is not ctrl+c', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-viewer-chord-reset-'));
+  await writeFile(path.join(dir, 'spec.md'), ['# Intro', 'opening'].join('\n'), 'utf8');
+
+  const state = { spec_path: 'spec.md' } as any;
+  let savedView: any = null;
+  let editorCalls = 0;
+  const openPromise = openSpecViewer({
+    ui: {
+      notify: () => {},
+      custom: (factory: any) => new Promise<void>((resolve) => {
+        savedView = factory(
+          { requestRender: () => {} },
+          { fg: (_c: string, text: string) => text, bold: (text: string) => text },
+          {},
+          () => resolve(),
+        );
+      }),
+      editor: async () => {
+        editorCalls += 1;
+        return 'Should not be used';
+      },
+    },
+  } as any, dir, state);
+
+  for (let attempt = 0; attempt < 20 && !savedView; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(savedView, 'Viewer should open in custom UI');
+
+  savedView.handleInput('\u000b');
+  savedView.handleInput('x');
+  savedView.handleInput('\u0003');
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  savedView.handleInput('q');
+  await openPromise;
+
+  assert.equal(editorCalls, 0);
+  assert.deepEqual(await readSpecComments(path.join(dir, '.ruta', 'comments.json')), []);
+});
+
+test('openSpecViewer navigates to next and previous commented lines', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-viewer-nav-'));
+  await writeFile(path.join(dir, 'spec.md'), ['# Intro', 'opening', '## Goals', 'goal text'].join('\n'), 'utf8');
+  await writeSpecComments(path.join(dir, '.ruta', 'comments.json'), [
+    {
+      id: 'c-1',
+      specPath: 'spec.md',
+      line: 2,
+      sectionRef: 'Intro',
+      excerpt: 'opening',
+      text: 'First',
+      createdAt: '2026-04-22T00:00:00.000Z',
+    },
+    {
+      id: 'c-2',
+      specPath: 'spec.md',
+      line: 4,
+      sectionRef: 'Goals',
+      excerpt: 'goal text',
+      text: 'Second',
+      createdAt: '2026-04-22T00:00:01.000Z',
+    },
+  ]);
+
+  const state = { spec_path: 'spec.md' } as any;
+  let savedView: any = null;
+  const openPromise = openSpecViewer({
+    ui: {
+      notify: () => {},
+      custom: (factory: any) => new Promise<void>((resolve) => {
+        savedView = factory(
+          { requestRender: () => {} },
+          { fg: (_c: string, text: string) => text, bold: (text: string) => text },
+          {},
+          () => resolve(),
+        );
+      }),
+      editor: async () => undefined,
+    },
+  } as any, dir, state);
+
+  for (let attempt = 0; attempt < 20 && !savedView; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  assert.ok(savedView, 'Viewer should open in custom UI');
+
+  savedView.handleInput(']');
+  assert.ok(savedView.render(32).some((line: string) => line.includes('>* 2  opening')));
+
+  savedView.handleInput(']');
+  assert.ok(savedView.render(32).some((line: string) => line.includes('>* 4  goal text')));
+
+  savedView.handleInput('[');
+  assert.ok(savedView.render(32).some((line: string) => line.includes('>* 2  opening')));
+
+  savedView.handleInput('q');
+  await openPromise;
 });
