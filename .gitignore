@@ -4,6 +4,22 @@ coverage/
 *.log
 .pi/
 
+# Local ruta workspaces created at repo root during development
+ach/
+.ruta/
+contracts.md
+gaps.md
+glossary.md
+notebook.md
+perspectives/
+premortem.md
+properties.md
+propositions.md
+synthesis.md
+
+# Ephemeral dogfooding runs
+dogfooding/runs/
+
 # Beads / Dolt files (added by bd init)
 .dolt/
 *.db

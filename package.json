@@ -8,6 +8,7 @@
   "scripts": {
     "test": "npx tsx --test test/**/*.test.ts",
     "hash-prompts": "node scripts/update-prompts-version.mjs",
+    "dogfood:run": "node scripts/dogfooding-run.mjs",
     "check": "npm run test && npm run hash-prompts"
   },
   "pi": {

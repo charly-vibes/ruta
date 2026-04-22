@@ -1,0 +1,9 @@
+{
+  "id": "self-hosted",
+  "name": "ruta self-hosted spec study",
+  "description": "Materialize a workspace for studying ruta against its own sample spec.",
+  "inputDir": "dogfooding/scenarios/self-hosted/input",
+  "entrySpec": "ruta-spec-v0.2.md",
+  "recommendedInitCommand": "/ruta-init ruta-spec-v0.2.md",
+  "snapshotDir": "dogfooding/snapshots/self-hosted/v0.2"
+}

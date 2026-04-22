@@ -35,14 +35,25 @@ pi -e .
 That loads this package for the current `pi` run only.
 The package manifest points pi at `extensions/ruta.ts` as the single extension entrypoint.
 
+## Repository layout
+
+The repo now separates package source from generated ruta workspaces:
+
+- `extensions/`, `skills/`, `prompts/`, `themes/`, `scripts/`, `test/` — package source
+- `openspec/specs/` — canonical OpenSpec-tracked product specs
+- `examples/specs/` — source spec inputs used in examples and local initialization
+- `dogfooding/scenarios/` — tracked dogfooding scenario definitions and their input fixtures
+- `dogfooding/snapshots/` — tracked promoted dogfooding workspaces kept as auditable evidence
+- `dogfooding/runs/` — ephemeral commit-aware workspaces materialized locally; gitignored
+
+Root-level ruta workspace artifacts such as `.ruta/`, `glossary.md`, or `gaps.md` are no longer part of the committed repo layout.
+
 ## Spec files in this repo
 
-This repo intentionally keeps two copies of the sample spec:
-
-- `ruta-spec-v0.2.md` is the source sample spec you point `/ruta-init` at in examples.
-- `spec/ruta-spec-v0.2.md` is the initialized workspace copy that ruta reads in-project after setup.
-
-That duplication is expected in this repo because `/ruta-init ruta-spec-v0.2.md` copies the source spec into `spec/` and ruta treats files under `spec/` as read-only after initialization.
+- `openspec/specs/ruta/spec.md` is the canonical OpenSpec product spec.
+- `openspec/specs/ruta/design.md` preserves the migrated narrative v0.2 specification text.
+- `examples/specs/ruta-spec-v0.2.md` is the sample input spec used in examples.
+- `dogfooding/snapshots/self-hosted/v0.2/` is a promoted initialized workspace snapshot for auditability.
 
 Other useful options:
 
@@ -64,7 +75,7 @@ If you are iterating on the extension, start with `pi -e .` and use `/reload` af
 Then inside pi:
 
 ```text
-/ruta-init ruta-spec-v0.2.md
+/ruta-init examples/specs/ruta-spec-v0.2.md
 /ruta-open-spec
 /ruta-open-spec Goals
 /ruta-comments
@@ -78,10 +89,36 @@ Then inside pi:
 /ruta-add-gap
 ```
 
-## Viewer smoke test
+## Dogfooding
+
+Tracked dogfooding is scenario-based.
+
+- Scenario definitions live under `dogfooding/scenarios/<scenario>/`
+- Promoted snapshots live under `dogfooding/snapshots/<scenario>/...`
+- Ephemeral local runs live under `dogfooding/runs/<scenario>/<commit>/`
+
+Materialize a fresh run for the current commit:
+
+```bash
+npm run dogfood:run -- self-hosted
+```
+
+Materialize a run for a specific revision label:
+
+```bash
+npm run dogfood:run -- self-hosted --commit demo-sha
+```
+
+The script copies the tracked scenario inputs into a fresh commit-scoped run directory and writes `dogfooding-run.json` metadata into that workspace. For the bundled self-hosted scenario, open the run directory in pi and initialize with:
 
 ```text
 /ruta-init ruta-spec-v0.2.md
+```
+
+## Viewer smoke test
+
+```text
+/ruta-init examples/specs/ruta-spec-v0.2.md
 /ruta-open-spec
 # use ↑↓, pgup/pgdn, home/end
 # press alt+c or ctrl+k ctrl+c to add a comment at the current line

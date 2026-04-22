@@ -1,2 +1,0 @@
-# Skeptic perspective
-
