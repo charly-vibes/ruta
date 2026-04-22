@@ -90,7 +90,10 @@ Then inside pi:
 /ruta-tutorial
 /ruta-probe "Mode contract: reimplement"
 /ruta-add-gap
+/ruta-exit
 ```
+
+ruta guardrails do **not** auto-activate on session start. Use `/ruta-start` to enable them for an existing project, and `/ruta-exit` to pause them for the current session.
 
 ## Dogfooding
 

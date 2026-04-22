@@ -25,6 +25,7 @@ function makeState(overrides: Partial<RutaProjectState> = {}): RutaProjectState 
 test('buildTutorialText explains how to start before initialization', () => {
   const text = buildTutorialText(null);
   assert.ok(text.includes('/ruta-init <spec-path>'));
+  assert.ok(text.includes('/ruta-start'));
   assert.ok(text.toLowerCase().includes('read'));
   assert.ok(text.toLowerCase().includes('glossary'));
   assert.ok(text.toLowerCase().includes('reimplement'));
@@ -32,11 +33,12 @@ test('buildTutorialText explains how to start before initialization', () => {
 
 test('buildTutorialText for read mode lists only read-stage commands and next action', () => {
   const text = buildTutorialText(makeState({ current_mode: 'read' }));
-  assert.ok(text.includes('mode: read'));
+  assert.ok(text.includes('[read]'));
   assert.ok(text.includes('/ruta-note'));
   assert.ok(text.includes('/ruta-unity'));
   assert.ok(text.includes('/ruta-done-reading'));
   assert.ok(text.includes('/ruta-tutorial'));
+  assert.ok(text.includes('active session state has a unity sentence'));
   // /ruta-probe-term and /ruta-probe appear in Key concepts (as illustrations), not in "Commands to use now"
   assert.ok(!text.includes('- /ruta-probe-term'));
   assert.ok(!text.includes('- /ruta-probe '));
@@ -45,7 +47,7 @@ test('buildTutorialText for read mode lists only read-stage commands and next ac
 
 test('buildTutorialText for glossary mode points to paraphrase workflow', () => {
   const text = buildTutorialText(makeState({ current_mode: 'glossary', gates: { read_unlocked: true, glossary_unlocked: false, reimplement_unlocked: false } }));
-  assert.ok(text.includes('mode: glossary'));
+  assert.ok(text.includes('[glossary]'));
   assert.ok(text.includes('/ruta-add-term'));
   assert.ok(text.includes('/ruta-probe-term'));
   assert.ok(text.includes('/ruta-done-glossary'));
@@ -60,7 +62,7 @@ test('buildHelpText with no topic lists all topics', () => {
   assert.ok(text.includes('# ruta help'));
   assert.ok(text.includes('Usage: /ruta-help <topic>'));
   // A sample of expected topics
-  for (const topic of ['unity', 'gap', 'probe', 'read', 'glossary', 'reimplement', 'gate', 'paraphrase']) {
+  for (const topic of ['unity', 'gap', 'probe', 'read', 'glossary', 'reimplement', 'gate', 'paraphrase', 'start', 'exit']) {
     assert.ok(text.includes(topic), `Expected topic index to include "${topic}"`);
   }
 });
@@ -70,6 +72,14 @@ test('buildHelpText for a known concept returns detailed explanation', () => {
   assert.ok(text.includes('Unity sentence'));
   assert.ok(text.includes('Mortimer Adler'));
   assert.ok(text.includes('/ruta-unity'));
+});
+
+
+test('buildHelpText for init describes the session-scoped state layout', () => {
+  const text = buildHelpText('init');
+  assert.ok(text.includes('.ruta/active.json'));
+  assert.ok(text.includes('.ruta/<spec-uuid>/session-N/ruta.json'));
+  assert.ok(!text.includes('.ruta/ruta.json'));
 });
 
 test('buildHelpText accepts /ruta- prefix and resolves to same topic', () => {
@@ -101,7 +111,7 @@ test('buildTutorialText for reimplement mode points to gap discovery workflow', 
     gates: { read_unlocked: true, glossary_unlocked: true, reimplement_unlocked: false },
     scope: 'Goals, Non-goals',
   }));
-  assert.ok(text.includes('mode: reimplement'));
+  assert.ok(text.includes('[reimplement]'));
   assert.ok(text.includes('/ruta-probe'));
   assert.ok(text.includes('/ruta-add-gap'));
   assert.ok(text.includes('/ruta-done-reimplement'));
@@ -110,4 +120,15 @@ test('buildTutorialText for reimplement mode points to gap discovery workflow', 
   // /ruta-probe-term appears in the shared Key concepts section (as an illustration), but not in the "Commands to use now" list
   assert.ok(!text.includes('- /ruta-probe-term'));
   assert.ok(text.toLowerCase().includes('ambigu'));
+});
+
+
+test('buildTutorialText prefers source_spec_path and appends the spec title when provided', () => {
+  const text = buildTutorialText(makeState({
+    current_mode: 'read',
+    spec_path: '.ruta/abc/session-2/spec.md',
+    source_spec_path: 'openspec/specs/ruta/spec.md',
+  }), 'ruta spec');
+  assert.ok(text.includes('spec: openspec/specs/ruta/spec.md  —  ruta spec'));
+  assert.ok(!text.includes('spec: .ruta/abc/session-2/spec.md'));
 });

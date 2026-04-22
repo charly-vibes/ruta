@@ -19,7 +19,7 @@ function modeTutorial(state: RutaProjectState): ModeTutorial {
         '/ruta-why — explain why AI is restricted here',
         '/ruta-tutorial — show this guide again',
       ],
-      success: 'Read mode is complete when notebook.md has at least one real note and .ruta/ruta.json has a unity sentence.',
+      success: 'Read mode is complete when notebook.md has at least one real note and the active session state has a unity sentence.',
       nextAction: state.unity_sentence
         ? 'Add another concrete note with /ruta-note, then run /ruta-done-reading when your first pass is complete.'
         : 'Write your unity sentence with /ruta-unity <sentence>, then keep taking notes with /ruta-note.',
@@ -66,23 +66,34 @@ const KEY_CONCEPTS = `## Key concepts
 - paraphrase-adequacy — whether your own definition of a term matches how the spec actually uses it. /ruta-probe-term checks this without writing the definition for you.
 - gate — a checkpoint ruta uses before letting you advance to the next mode. Gates check that artifacts are non-empty, not that they are good.`;
 
-function formatModeBlock(mode: RutaMode, state: RutaProjectState, tutorial: ModeTutorial): string {
+function accessLabel(mode: RutaMode): string {
+  if (mode === 'read') return 'no AI';
+  if (mode === 'glossary') return 'AI: narrow';
+  return 'AI: dialog';
+}
+
+function formatModeBlock(mode: RutaMode, state: RutaProjectState, tutorial: ModeTutorial, specTitle?: string): string {
+  const gates = state.gates;
+  const toolbar = `[${mode}] ${accessLabel(mode)}  ·  gates: read=${gates.read_unlocked} glossary=${gates.glossary_unlocked} reimpl=${gates.reimplement_unlocked}`;
+  const displayPath = state.source_spec_path ?? state.spec_path;
+  const specLine = specTitle ? `spec: ${displayPath}  —  ${specTitle}` : `spec: ${displayPath}`;
+
   const lines = [
     '# ruta tutorial',
     '',
-    `- mode: ${mode}`,
-    `- purpose: ${tutorial.purpose}`,
-    `- spec: ${state.spec_path}`,
-    `- read gate: ${state.gates.read_unlocked}`,
-    `- glossary gate: ${state.gates.glossary_unlocked}`,
-    `- reimplement gate: ${state.gates.reimplement_unlocked}`,
+    toolbar,
+    specLine,
   ];
 
   if (state.scope) {
-    lines.push(`- scope: ${state.scope}`);
+    lines.push(`scope: ${state.scope}`);
   }
 
   lines.push(
+    '',
+    '## Purpose',
+    '',
+    tutorial.purpose,
     '',
     '## Commands to use now',
     '',
@@ -185,7 +196,7 @@ What to do:
 3. Write your unity sentence: /ruta-unity <sentence>
 4. When you have at least one note and a unity sentence, run /ruta-done-reading
 
-Read mode is complete when notebook.md has at least one real note and the unity sentence is set.`,
+Read mode is complete when notebook.md has at least one real note and the active session state has a unity sentence.`,
   },
   glossary: {
     title: 'Glossary mode',
@@ -222,19 +233,34 @@ What to do:
 Reimplement mode is complete when gaps.md has at least one gap entry per major section in scope.`,
   },
   // Commands
+  start: {
+    title: '/ruta-start',
+    body: `Enables ruta guardrails for the current session.
+
+Use this when you already have a ruta project and want to re-enter the restricted workflow after launching pi.
+
+ruta no longer auto-activates on startup. You can safely chat normally until you explicitly run /ruta-start.`,
+  },
+  exit: {
+    title: '/ruta-exit',
+    body: `Disables ruta guardrails for the current session.
+
+This stops mode-based chat/tool restrictions and clears the ruta status widget.
+
+Your files and project state are unchanged. Run /ruta-start to resume later in the same workspace.`,
+  },
   init: {
     title: '/ruta-init <spec-path>',
     body: `Initializes a new ruta project in the current directory.
 
 Creates:
-- .ruta/ruta.json — project state (mode, gates, unity sentence, spec hash)
-- notebook.md — your personal notes (read mode)
-- glossary.md — your term definitions (glossary mode)
-- gaps.md — implementation ambiguities you discover (reimplement mode)
+- .ruta/active.json — active-session map for the current workspace
+- .ruta/<spec-uuid>/session-N/ruta.json — per-spec session state (mode, gates, unity sentence, spec hash)
+- notebook.md, glossary.md, gaps.md, and related artifacts inside that session directory
 
 The spec-path should be relative to the current directory. The spec must exist as a file.
 
-After initialization, the project starts in read mode. Run /ruta-tutorial to see what to do next.`,
+After initialization, the project starts in read mode and guardrails are enabled for this session. Run /ruta-tutorial to see what to do next.`,
   },
   status: {
     title: '/ruta-status',
@@ -394,7 +420,7 @@ export function buildHelpText(topic: string | null | undefined): string {
   return `# ruta help — ${found.title}\n\n${found.body}`;
 }
 
-export function buildTutorialText(state: RutaProjectState | null): string {
+export function buildTutorialText(state: RutaProjectState | null, specTitle?: string): string {
   if (!state) {
     return [
       '# ruta tutorial',
@@ -406,6 +432,7 @@ export function buildTutorialText(state: RutaProjectState | null): string {
       '',
       '- Run /ruta-init <spec-path> in a directory that contains the spec you want to study.',
       '- ruta will create file-backed artifacts: notebook.md (your notes), glossary.md (your term definitions), gaps.md (implementation ambiguities).',
+      '- If a project is already initialized, run /ruta-start to enable guardrails for this session.',
       '',
       '## Three-mode workflow',
       '',
@@ -421,5 +448,5 @@ export function buildTutorialText(state: RutaProjectState | null): string {
     ].join('\n');
   }
 
-  return formatModeBlock(state.current_mode, state, modeTutorial(state));
+  return formatModeBlock(state.current_mode, state, modeTutorial(state), specTitle);
 }
