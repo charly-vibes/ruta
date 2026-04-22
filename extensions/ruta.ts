@@ -15,6 +15,7 @@ import {
   getSpecSectionByRef,
   glossaryGateSatisfied,
   isValidTriageToken,
+  listSpecComments,
   loadProjectState,
   modeFragment,
   nextGapIndex,
@@ -558,6 +559,36 @@ export default function ruta(pi: ExtensionAPI) {
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
+    },
+  });
+
+  pi.registerCommand("ruta-comments", {
+    description: "List stored comments for the current spec",
+    handler: async (_args, ctx) => {
+      const state = await loadStateOrNotify(ctx.cwd, ctx);
+      if (!state) return;
+      const comments = await listSpecComments(artifactPaths(ctx.cwd).comments, state.spec_path);
+      if (comments.length === 0) {
+        ctx.ui.notify("No comments stored for the current spec.", "info");
+        return;
+      }
+      const body = [
+        `# ruta comments`,
+        "",
+        `- spec: ${state.spec_path}`,
+        `- count: ${comments.length}`,
+        "",
+        ...comments.flatMap((comment) => [
+          `## L${comment.line}${comment.sectionRef ? ` — ${comment.sectionRef}` : ""}`,
+          "",
+          `${comment.text}`,
+          "",
+          `- excerpt: ${comment.excerpt || "(none)"}`,
+          `- created: ${comment.createdAt}`,
+          "",
+        ]),
+      ].join("\n");
+      await showScratch(ctx, "ruta comments", body);
     },
   });
 

@@ -3,11 +3,13 @@ import test from 'node:test';
 import { canonicalizeSpec } from './test-helpers';
 import {
   appendSpecComment,
+  createSpecComment,
   createTriageToken,
   deriveSpecCommentAnchor,
   getSpecSectionByRef,
   glossaryGateSatisfied,
   isValidTriageToken,
+  listSpecComments,
   readGateSatisfied,
   readSpecComments,
   reimplementGateSatisfied,
@@ -216,4 +218,80 @@ test('deriveSpecCommentAnchor returns excerpt and best-effort section label', ()
     sectionRef: 'Goals',
     excerpt: 'Goal line',
   });
+});
+
+test('createSpecComment stores anchor metadata for the requested line', () => {
+  const spec = [
+    '# Intro',
+    '',
+    'Opening context',
+    '## Goals',
+    '',
+    'Goal line',
+  ].join('\n');
+
+  assert.deepEqual(
+    createSpecComment(spec, 'spec/example.md', 5, 'Needs clarification', {
+      id: 'c-1',
+      createdAt: '2026-04-22T00:00:00.000Z',
+    }),
+    {
+      id: 'c-1',
+      specPath: 'spec/example.md',
+      line: 5,
+      sectionRef: 'Goals',
+      excerpt: 'Goal line',
+      text: 'Needs clarification',
+      createdAt: '2026-04-22T00:00:00.000Z',
+    },
+  );
+});
+
+test('listSpecComments filters by spec path and orders by line then creation time', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ruta-comments-list-'));
+  const commentsPath = path.join(dir, 'comments.json');
+
+  await writeSpecComments(commentsPath, [
+    {
+      id: 'c-3',
+      specPath: 'spec/other.md',
+      line: 2,
+      sectionRef: 'Other',
+      excerpt: 'Other line',
+      text: 'Ignore me',
+      createdAt: '2026-04-22T00:02:00.000Z',
+    },
+    {
+      id: 'c-2',
+      specPath: 'spec/example.md',
+      line: 4,
+      sectionRef: 'Goals',
+      excerpt: 'Later same line',
+      text: 'Second on same line',
+      createdAt: '2026-04-22T00:02:00.000Z',
+    },
+    {
+      id: 'c-1',
+      specPath: 'spec/example.md',
+      line: 4,
+      sectionRef: 'Goals',
+      excerpt: 'Earlier same line',
+      text: 'First on same line',
+      createdAt: '2026-04-22T00:01:00.000Z',
+    },
+    {
+      id: 'c-0',
+      specPath: 'spec/example.md',
+      line: 2,
+      sectionRef: 'Intro',
+      excerpt: 'Opening context',
+      text: 'Earlier line',
+      createdAt: '2026-04-22T00:03:00.000Z',
+    },
+  ]);
+
+  assert.deepEqual(
+    (await listSpecComments(commentsPath, 'spec/example.md')).map((comment) => comment.id),
+    ['c-0', 'c-1', 'c-2'],
+  );
 });

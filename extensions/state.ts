@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 
@@ -438,6 +438,34 @@ export async function appendSpecComment(filePath: string, comment: SpecComment):
   const comments = await readSpecComments(filePath);
   comments.push(comment);
   await writeSpecComments(filePath, comments);
+}
+
+export function listSpecComments(commentsPath: string, specPath?: string): Promise<SpecComment[]> {
+  return readSpecComments(commentsPath).then((comments) => comments
+    .filter((comment) => specPath ? comment.specPath === specPath : true)
+    .sort((a, b) => {
+      if (a.line !== b.line) return a.line - b.line;
+      if (a.createdAt !== b.createdAt) return a.createdAt.localeCompare(b.createdAt);
+      return a.id.localeCompare(b.id);
+    }));
+}
+
+export function createSpecComment(
+  specText: string,
+  specPath: string,
+  lineNumber: number,
+  text: string,
+  options?: { id?: string; createdAt?: string; updatedAt?: string },
+): SpecComment {
+  const anchor = deriveSpecCommentAnchor(specText, lineNumber);
+  return {
+    id: options?.id ?? randomUUID(),
+    specPath,
+    ...anchor,
+    text,
+    createdAt: options?.createdAt ?? new Date().toISOString(),
+    ...(options?.updatedAt ? { updatedAt: options.updatedAt } : {}),
+  };
 }
 
 export function deriveSpecCommentAnchor(specText: string, lineNumber: number): SpecCommentAnchor {

@@ -1,6 +1,14 @@
 import path from "node:path";
 import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
-import { readText, type RutaProjectState } from "./state.ts";
+import {
+  appendSpecComment,
+  artifactPaths,
+  createSpecComment,
+  listSpecComments,
+  readText,
+  type RutaProjectState,
+  type SpecComment,
+} from "./state.ts";
 
 export function findSpecLineForSection(specText: string, section?: string): number | null {
   const query = section?.trim().toLowerCase();
@@ -25,10 +33,12 @@ export function findSpecLineForSection(specText: string, section?: string): numb
 
 export function makeSpecViewerFrame(
   specText: string,
-  options: { cursorLine: number; scrollTop: number; bodyHeight: number; width: number },
+  options: { cursorLine: number; scrollTop: number; bodyHeight: number; width: number; commentLines?: Iterable<number> },
 ): string[] {
   const lines = splitSpecLines(specText);
-  const gutterWidth = Math.max(2, String(lines.length).length);
+  const commentLines = new Set(options.commentLines ?? []);
+  const hasComments = commentLines.size > 0;
+  const gutterWidth = hasComments ? String(lines.length).length : Math.max(2, String(lines.length).length);
   const bodyHeight = Math.max(1, options.bodyHeight);
   const maxScrollTop = Math.max(1, lines.length - bodyHeight + 1);
   let scrollTop = Math.max(1, Math.min(options.scrollTop, maxScrollTop));
@@ -39,8 +49,9 @@ export function makeSpecViewerFrame(
 
   return visible.map((line, offset) => {
     const lineNumber = scrollTop + offset;
-    const prefix = lineNumber === options.cursorLine ? "> " : "  ";
-    const gutter = `${prefix}${String(lineNumber).padStart(gutterWidth)}  `;
+    const gutter = hasComments
+      ? `${lineNumber === options.cursorLine ? ">" : " "}${commentLines.has(lineNumber) ? "*" : " "} ${String(lineNumber).padStart(gutterWidth)}  `
+      : `${lineNumber === options.cursorLine ? "> " : "  "}${String(lineNumber).padStart(gutterWidth)}  `;
     const contentWidth = Math.max(0, options.width - gutter.length);
     return `${gutter}${truncatePlainText(line, contentWidth)}`;
   });
@@ -67,6 +78,9 @@ class RutaSpecViewer {
   private readonly title: string;
   private cursorLine: number;
   private scrollTop: number;
+  private comments: SpecComment[];
+  private statusMessage = "";
+  private savingComment = false;
 
   constructor(
     private readonly tui: { requestRender: () => void },
@@ -74,17 +88,25 @@ class RutaSpecViewer {
     title: string,
     specText: string,
     initialLine: number,
+    initialComments: SpecComment[],
+    private readonly addCommentAtLine: (lineNumber: number) => Promise<SpecComment | null>,
     private readonly done: (value: undefined) => void,
   ) {
     this.lines = splitSpecLines(specText);
     this.title = title;
     this.cursorLine = clamp(initialLine, 1, this.lines.length);
     this.scrollTop = this.initialScrollTop();
+    this.comments = initialComments;
   }
 
   handleInput(data: string): void {
     const bodyHeight = this.bodyHeight();
 
+    if (matchesKey(data, Key.alt("c"))) {
+      if (!this.savingComment) void this.handleAddComment();
+      return;
+    }
+    if (this.savingComment) return;
     if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter) || data === "q") {
       this.done(undefined);
       return;
@@ -109,17 +131,45 @@ class RutaSpecViewer {
       scrollTop: this.scrollTop,
       bodyHeight,
       width,
+      commentLines: this.comments.map((comment) => comment.line),
     });
 
     return [
       truncateToWidth(this.theme.fg("accent", this.theme.bold(this.title)), width),
-      truncateToWidth(this.theme.fg("dim", "↑↓ move • pgup/pgdn scroll • home/end jump • enter/esc/q close"), width),
-      ...frame.map((line) => line.startsWith("> ") ? this.theme.fg("accent", line) : line),
-      truncateToWidth(this.theme.fg("muted", `line ${this.cursorLine}/${this.lines.length}`), width),
+      truncateToWidth(this.theme.fg("dim", "↑↓ move • alt+c comment • pgup/pgdn scroll • home/end jump • enter/esc/q close"), width),
+      ...frame.map((line) => line.startsWith(">") ? this.theme.fg("accent", line) : line),
+      truncateToWidth(this.theme.fg("muted", this.statusLine()), width),
     ];
   }
 
   invalidate(): void {}
+
+  private async handleAddComment(): Promise<void> {
+    this.savingComment = true;
+    this.statusMessage = `adding comment at line ${this.cursorLine}`;
+    this.tui.requestRender();
+    try {
+      const comment = await this.addCommentAtLine(this.cursorLine);
+      if (comment) {
+        this.comments = [...this.comments, comment];
+        this.statusMessage = `comment saved at line ${comment.line}`;
+      } else {
+        this.statusMessage = "comment cancelled";
+      }
+    } catch (error) {
+      this.statusMessage = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.savingComment = false;
+      this.tui.requestRender();
+    }
+  }
+
+  private statusLine(): string {
+    const commentCount = this.comments.length;
+    const commentText = `${commentCount} comment${commentCount === 1 ? "" : "s"}`;
+    const suffix = this.statusMessage ? ` • ${this.statusMessage}` : "";
+    return `line ${this.cursorLine}/${this.lines.length} • ${commentText}${suffix}`;
+  }
 
   private bodyHeight(): number {
     const rows = process.stdout.rows ?? 24;
@@ -153,7 +203,26 @@ export async function openSpecViewer(
     return;
   }
   const initialLine = resolved ?? 1;
+  const commentsPath = artifactPaths(cwd).comments;
+  const initialComments = await listSpecComments(commentsPath, state.spec_path);
   await ctx.ui.custom((tui: any, theme: any, _keybindings: any, done: (value: undefined) => void) => (
-    new RutaSpecViewer(tui, theme, `ruta spec viewer — ${state.spec_path}`, specText, initialLine, done)
+    new RutaSpecViewer(
+      tui,
+      theme,
+      `ruta spec viewer — ${state.spec_path}`,
+      specText,
+      initialLine,
+      initialComments,
+      async (lineNumber: number) => {
+        const draft = await ctx.ui.editor(`Comment for ${state.spec_path}:${lineNumber}`, "");
+        const text = draft?.trim();
+        if (!text) return null;
+        const comment = createSpecComment(specText, state.spec_path, lineNumber, text);
+        await appendSpecComment(commentsPath, comment);
+        ctx.ui.notify(`Comment saved at ${state.spec_path}:${comment.line}`, "success");
+        return comment;
+      },
+      done,
+    )
   ));
 }
