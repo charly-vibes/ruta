@@ -1,0 +1,1 @@
+Implemented OpenSpec setup, restructured repo artifacts into examples/dogfooding, added commit-aware dogfooding runner, migrated canonical ruta spec into openspec/specs/ruta, and updated docs/ignore rules.
