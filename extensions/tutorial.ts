@@ -2,7 +2,7 @@ import type { RutaProjectState, RutaMode } from './state.ts';
 
 interface ModeTutorial {
   purpose: string;
-  commands: string[];
+  commands: CommandDisclosureItem[];
   success: string;
   nextAction: string;
 }
@@ -27,17 +27,21 @@ export interface ModeCommandDisclosure {
   recoveryHint?: string;
 }
 
+function tutorialUtilityCommands(mode: RutaMode): CommandDisclosureItem[] {
+  return [
+    { command: '/ruta-why', purpose: mode === 'glossary' ? 'explain why help is narrow in this mode' : 'explain why AI is restricted here' },
+    { command: '/ruta-tutorial', purpose: 'show this guide again' },
+  ];
+}
+
 function modeTutorial(state: RutaProjectState): ModeTutorial {
   const mode = state.current_mode;
   if (mode === 'read') {
     return {
       purpose: 'Read the spec yourself, collect ignorance, and state the document\'s unity in your own words.',
       commands: [
-        '/ruta-note <text> — add an observation or open question to notebook.md',
-        '/ruta-unity <sentence> — save your unity sentence',
-        '/ruta-done-reading — check the read gate and optionally advance',
-        '/ruta-why — explain why AI is restricted here',
-        '/ruta-tutorial — show this guide again',
+        ...MODE_COMMANDS.read,
+        ...tutorialUtilityCommands('read'),
       ],
       success: 'Read mode is complete when notebook.md has at least one real note and the active session state has a unity sentence.',
       nextAction: state.unity_sentence
@@ -50,11 +54,8 @@ function modeTutorial(state: RutaProjectState): ModeTutorial {
     return {
       purpose: 'Define important terms from the spec and test whether your own paraphrases actually hold up.',
       commands: [
-        '/ruta-add-term <term> — add a glossary entry scaffold',
-        '/ruta-probe-term <term> — probe whether your paraphrase is adequate',
-        '/ruta-done-glossary — check the glossary gate and optionally advance',
-        '/ruta-why — explain why help is narrow in this mode',
-        '/ruta-tutorial — show this guide again',
+        ...MODE_COMMANDS.glossary,
+        ...tutorialUtilityCommands('glossary'),
       ],
       success: 'Glossary mode is complete when glossary.md contains at least one term with a non-empty user paraphrase.',
       nextAction: 'Pick a term that matters to the architecture, add it with /ruta-add-term <term>, then run /ruta-probe-term <term>.',
@@ -64,12 +65,10 @@ function modeTutorial(state: RutaProjectState): ModeTutorial {
   return {
     purpose: 'Surface implementation ambiguities, silences, and forced decisions without prematurely resolving them.',
     commands: [
-      '/ruta-scope <ref-range> — optionally narrow the section range for large specs',
-      '/ruta-probe <section> — inspect a section for implementation gaps',
-      '/ruta-add-gap — record a gap manually in gaps.md',
-      '/ruta-done-reimplement — check the reimplementation gate',
-      '/ruta-why — explain the guardrails for this mode',
-      '/ruta-tutorial — show this guide again',
+      { command: '/ruta-scope <ref-range>', purpose: 'optionally narrow the section range for large specs' },
+      ...MODE_COMMANDS.reimplement,
+      { command: '/ruta-why', purpose: 'explain the guardrails for this mode' },
+      { command: '/ruta-tutorial', purpose: 'show this guide again' },
     ],
     success: 'Reimplement mode is complete when gaps.md has at least one gap entry per major section in scope.',
     nextAction: state.scope
@@ -241,7 +240,7 @@ function formatModeBlock(mode: RutaMode, state: RutaProjectState, tutorial: Mode
     '',
     '## Commands to use now',
     '',
-    ...tutorial.commands.map((command) => `- ${command}`),
+    ...tutorial.commands.map(commandLine),
     '',
     '## What success looks like',
     '',
