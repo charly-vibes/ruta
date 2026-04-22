@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildHelpText, buildTutorialText, HELP_TOPIC_KEYS } from '../extensions/tutorial';
+import { buildHelpText, buildStatusText, buildTutorialText, HELP_TOPIC_KEYS } from '../extensions/tutorial';
 import type { RutaProjectState } from '../extensions/state';
 
 function makeState(overrides: Partial<RutaProjectState> = {}): RutaProjectState {
@@ -57,10 +57,16 @@ test('buildTutorialText for glossary mode points to paraphrase workflow', () => 
   assert.ok(text.toLowerCase().includes('paraphrase'));
 });
 
-test('buildHelpText with no topic lists all topics', () => {
-  const text = buildHelpText(null);
+test('buildHelpText with no topic is mode-aware and separates available commands from next unlock', () => {
+  const text = buildHelpText(makeState({ current_mode: 'glossary', gates: { read_unlocked: true, glossary_unlocked: false, reimplement_unlocked: false } }), null);
   assert.ok(text.includes('# ruta help'));
   assert.ok(text.includes('Usage: /ruta-help <topic>'));
+  assert.ok(text.includes('## Available now'));
+  assert.ok(text.includes('/ruta-add-term'));
+  assert.ok(text.includes('/ruta-probe-term'));
+  assert.ok(text.includes('## Next unlock'));
+  assert.ok(text.includes('/ruta-done-glossary'));
+  assert.ok(!text.includes('- /ruta-note —'));
   // A sample of expected topics
   for (const topic of ['unity', 'gap', 'probe', 'read', 'glossary', 'reimplement', 'gate', 'paraphrase', 'start', 'exit']) {
     assert.ok(text.includes(topic), `Expected topic index to include "${topic}"`);
@@ -68,7 +74,7 @@ test('buildHelpText with no topic lists all topics', () => {
 });
 
 test('buildHelpText for a known concept returns detailed explanation', () => {
-  const text = buildHelpText('unity');
+  const text = buildHelpText(null, 'unity');
   assert.ok(text.includes('Unity sentence'));
   assert.ok(text.includes('Mortimer Adler'));
   assert.ok(text.includes('/ruta-unity'));
@@ -76,23 +82,24 @@ test('buildHelpText for a known concept returns detailed explanation', () => {
 
 
 test('buildHelpText for init describes the session-scoped state layout', () => {
-  const text = buildHelpText('init');
+  const text = buildHelpText(null, 'init');
   assert.ok(text.includes('.ruta/active.json'));
   assert.ok(text.includes('.ruta/<spec-uuid>/session-N/ruta.json'));
   assert.ok(!text.includes('.ruta/ruta.json'));
 });
 
 test('buildHelpText accepts /ruta- prefix and resolves to same topic', () => {
-  const withPrefix = buildHelpText('/ruta-unity');
-  const withoutPrefix = buildHelpText('unity');
+  const withPrefix = buildHelpText(null, '/ruta-unity');
+  const withoutPrefix = buildHelpText(null, 'unity');
   assert.equal(withPrefix, withoutPrefix);
 });
 
-test('buildHelpText for unknown topic returns helpful error with suggestions', () => {
-  const text = buildHelpText('uni');
+test('buildHelpText for unknown topic returns suggestions plus the mode-aware command map', () => {
+  const text = buildHelpText(makeState({ current_mode: 'read' }), 'uni');
   assert.ok(text.includes('Unknown topic'));
-  // Should suggest "unity" since it starts with "uni"
   assert.ok(text.includes('unity'));
+  assert.ok(text.includes('## Available now'));
+  assert.ok(text.includes('/ruta-note'));
 });
 
 test('HELP_TOPIC_KEYS is sorted and non-empty', () => {
@@ -103,6 +110,38 @@ test('HELP_TOPIC_KEYS is sorted and non-empty', () => {
       `Keys not sorted: "${HELP_TOPIC_KEYS[i - 1]}" > "${HELP_TOPIC_KEYS[i]}"`,
     );
   }
+});
+
+test('buildStatusText shows available-now commands and next unlock for the active mode', () => {
+  const text = buildStatusText(makeState({
+    current_mode: 'read',
+    gates: { read_unlocked: false, glossary_unlocked: false, reimplement_unlocked: false },
+  }), {
+    glossaryTerms: 0,
+    gaps: 0,
+    majorSections: 3,
+  });
+  assert.ok(text.includes('## Available now'));
+  assert.ok(text.includes('/ruta-note'));
+  assert.ok(text.includes('/ruta-unity'));
+  assert.ok(text.includes('/ruta-done-reading'));
+  assert.ok(text.includes('## Next unlock'));
+  assert.ok(text.includes('read gate'));
+});
+
+test('buildStatusText falls back to bootstrap commands with a recovery hint when state is missing', () => {
+  const text = buildStatusText(null, {
+    glossaryTerms: 0,
+    gaps: 0,
+    majorSections: 0,
+  }, {
+    recoveryHint: 'Run /ruta-init <spec-path> to initialize a spec, or /ruta-resume to reconnect to an existing session.',
+  });
+  assert.ok(text.includes('## Available now'));
+  assert.ok(text.includes('/ruta-init'));
+  assert.ok(text.includes('/ruta-tutorial'));
+  assert.ok(text.includes('## Recovery'));
+  assert.ok(text.includes('/ruta-resume'));
 });
 
 test('buildTutorialText for reimplement mode points to gap discovery workflow', () => {

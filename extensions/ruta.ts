@@ -57,7 +57,7 @@ import { openSpecViewer } from "./spec-viewer.ts";
 import { openTriageView } from "./triage.ts";
 import { detectDisagreement, formatDisagreementReport, selectSecondaryModel } from "./disagree.ts";
 import { detectPromptOverrides } from "./prompt-integrity.ts";
-import { buildHelpText, buildTutorialText, HELP_TOPIC_KEYS } from "./tutorial.ts";
+import { buildHelpText, buildStatusText, buildTutorialText, HELP_TOPIC_KEYS } from "./tutorial.ts";
 import { openTextViewer } from "./text-viewer.ts";
 
 const NO_SESSIONS_MESSAGE = "No sessions yet. Run `/ruta-init <path>` to start.";
@@ -646,30 +646,42 @@ export default function ruta(pi: ExtensionAPI) {
   pi.registerCommand("ruta-status", {
     description: "Show current ruta mode, gates, and artifact summary",
     handler: async (_args, ctx) => {
-      const active = await loadStateOrNotify(ctx.cwd, ctx);
-      if (!active) return;
-      const { state, sessionDir } = active;
-      const paths = artifactPaths(sessionDir);
-      const glossaryEntries = await readGlossaryEntries(paths.glossary);
-      const gapEntries = await readGapEntries(paths.gaps);
-      const headings = await readMajorSectionHeadings(path.join(sessionDir, state.spec_path));
-      const toolbar = `[${state.current_mode}] ${describeAccess(state.current_mode)}  ·  gates: read=${state.gates.read_unlocked} glossary=${state.gates.glossary_unlocked} reimpl=${state.gates.reimplement_unlocked}`;
-      const summary = [
-        `# ruta status`,
-        "",
-        toolbar,
-        `spec: ${state.source_spec_path ?? state.spec_path}`,
-        "",
-        `- unity sentence: ${state.unity_sentence ?? "(missing)"}`,
-        ...(state.scope ? [`- scope: ${state.scope}`] : []),
-        "",
-        "## Artifacts",
-        "",
-        `- glossary terms: ${glossaryEntries.length}`,
-        `- gaps: ${gapEntries.length}`,
-        `- major sections: ${headings.length}`,
-      ].join("\n");
-      await showScratch(ctx, "ruta status", summary);
+      try {
+        const active = await loadActiveSession(ctx.cwd);
+        if (!active) {
+          await showScratch(
+            ctx,
+            "ruta status",
+            buildStatusText(null, { glossaryTerms: 0, gaps: 0, majorSections: 0 }, {
+              recoveryHint: "Run /ruta-init <spec-path> to initialize a spec, or /ruta-resume to reconnect to an existing session.",
+            }),
+          );
+          return;
+        }
+
+        const { state, sessionDir } = active;
+        const paths = artifactPaths(sessionDir);
+        const glossaryEntries = await readGlossaryEntries(paths.glossary);
+        const gapEntries = await readGapEntries(paths.gaps);
+        const headings = await readMajorSectionHeadings(path.join(sessionDir, state.spec_path));
+        await showScratch(
+          ctx,
+          "ruta status",
+          buildStatusText(state, {
+            glossaryTerms: glossaryEntries.length,
+            gaps: gapEntries.length,
+            majorSections: headings.length,
+          }),
+        );
+      } catch {
+        await showScratch(
+          ctx,
+          "ruta status",
+          buildStatusText(null, { glossaryTerms: 0, gaps: 0, majorSections: 0 }, {
+            recoveryHint: "State could not be read. Reinitialize with /ruta-init <spec-path> or resume a healthy session with /ruta-resume.",
+          }),
+        );
+      }
     },
   });
 
@@ -691,7 +703,17 @@ export default function ruta(pi: ExtensionAPI) {
         .map((key) => ({ value: key, description: key }));
     },
     handler: async (args, ctx) => {
-      await showScratch(ctx, "ruta help", buildHelpText(args.trim() || null));
+      const topic = args.trim() || null;
+      try {
+        const active = await loadActiveSession(ctx.cwd);
+        await showScratch(ctx, "ruta help", buildHelpText(active?.state ?? null, topic, !active ? {
+          recoveryHint: "Run /ruta-init <spec-path> to initialize a spec, or /ruta-resume to reconnect to an existing session.",
+        } : undefined));
+      } catch {
+        await showScratch(ctx, "ruta help", buildHelpText(null, topic, {
+          recoveryHint: "State could not be read. Reinitialize with /ruta-init <spec-path> or resume a healthy session with /ruta-resume.",
+        }));
+      }
     },
   });
 

@@ -7,6 +7,26 @@ interface ModeTutorial {
   nextAction: string;
 }
 
+interface CommandDisclosureItem {
+  command: string;
+  purpose: string;
+}
+
+interface NextUnlockDisclosure {
+  gate: string;
+  transitionCommand: CommandDisclosureItem;
+  supportingCommands: CommandDisclosureItem[];
+}
+
+export interface ModeCommandDisclosure {
+  always: CommandDisclosureItem[];
+  bootstrap: CommandDisclosureItem[];
+  modeSpecific: CommandDisclosureItem[];
+  transition: CommandDisclosureItem[];
+  nextUnlock?: NextUnlockDisclosure;
+  recoveryHint?: string;
+}
+
 function modeTutorial(state: RutaProjectState): ModeTutorial {
   const mode = state.current_mode;
   if (mode === 'read') {
@@ -65,6 +85,130 @@ const KEY_CONCEPTS = `## Key concepts
 - probe — an AI-assisted scan of one spec section that lists implementation gaps. The AI surfaces ambiguities; you decide whether to resolve them.
 - paraphrase-adequacy — whether your own definition of a term matches how the spec actually uses it. /ruta-probe-term checks this without writing the definition for you.
 - gate — a checkpoint ruta uses before letting you advance to the next mode. Gates check that artifacts are non-empty, not that they are good.`;
+
+const ALWAYS_COMMANDS: CommandDisclosureItem[] = [
+  { command: '/ruta-help', purpose: 'explain a ruta concept or command' },
+  { command: '/ruta-tutorial', purpose: 'show the mode-aware workflow guide' },
+  { command: '/ruta-why', purpose: 'explain why AI is restricted here' },
+];
+
+const BOOTSTRAP_COMMANDS: CommandDisclosureItem[] = [
+  { command: '/ruta-init <spec-path>', purpose: 'initialize a ruta session for a spec' },
+  { command: '/ruta-start', purpose: 'enable guardrails for an existing session' },
+  { command: '/ruta-resume [spec-path]', purpose: 'reconnect to an existing session' },
+];
+
+const MODE_COMMANDS: Record<RutaMode, CommandDisclosureItem[]> = {
+  read: [
+    { command: '/ruta-note <text>', purpose: 'capture an observation or question in notebook.md' },
+    { command: '/ruta-unity <sentence>', purpose: 'record the spec\'s unity in your own words' },
+    { command: '/ruta-done-reading', purpose: 'check the read gate and advance if ready' },
+  ],
+  glossary: [
+    { command: '/ruta-add-term <term>', purpose: 'add a glossary scaffold for an important term' },
+    { command: '/ruta-probe-term <term>', purpose: 'test whether your paraphrase matches spec usage' },
+    { command: '/ruta-done-glossary', purpose: 'check the glossary gate and advance if ready' },
+  ],
+  reimplement: [
+    { command: '/ruta-probe <section>', purpose: 'scan one section for implementation gaps' },
+    { command: '/ruta-add-gap', purpose: 'record a gap you noticed yourself' },
+    { command: '/ruta-done-reimplement', purpose: 'check the reimplementation gate' },
+  ],
+};
+
+function commandLine(item: CommandDisclosureItem): string {
+  return `- ${item.command} — ${item.purpose}`;
+}
+
+function commandMatches(item: CommandDisclosureItem, commandPrefix: string): boolean {
+  return item.command.startsWith(commandPrefix);
+}
+
+function getTransitionDisclosure(state: RutaProjectState): NextUnlockDisclosure | undefined {
+  if (state.current_mode === 'read' && !state.gates.read_unlocked) {
+    return {
+      gate: 'read gate',
+      transitionCommand: MODE_COMMANDS.read.find((item) => commandMatches(item, '/ruta-done-reading'))!,
+      supportingCommands: MODE_COMMANDS.read.filter((item) => !commandMatches(item, '/ruta-done-reading')),
+    };
+  }
+
+  if (state.current_mode === 'glossary' && !state.gates.glossary_unlocked) {
+    return {
+      gate: 'glossary gate',
+      transitionCommand: MODE_COMMANDS.glossary.find((item) => commandMatches(item, '/ruta-done-glossary'))!,
+      supportingCommands: MODE_COMMANDS.glossary.filter((item) => !commandMatches(item, '/ruta-done-glossary')),
+    };
+  }
+
+  if (state.current_mode === 'reimplement' && !state.gates.reimplement_unlocked) {
+    return {
+      gate: 'reimplement gate',
+      transitionCommand: MODE_COMMANDS.reimplement.find((item) => commandMatches(item, '/ruta-done-reimplement'))!,
+      supportingCommands: MODE_COMMANDS.reimplement.filter((item) => !commandMatches(item, '/ruta-done-reimplement')),
+    };
+  }
+
+  return undefined;
+}
+
+export function getModeCommandDisclosure(state: RutaProjectState | null, options?: { recoveryHint?: string }): ModeCommandDisclosure {
+  if (!state) {
+    return {
+      always: ALWAYS_COMMANDS,
+      bootstrap: BOOTSTRAP_COMMANDS,
+      modeSpecific: [],
+      transition: [],
+      recoveryHint: options?.recoveryHint,
+    };
+  }
+
+  const modeSpecific = MODE_COMMANDS[state.current_mode];
+  const nextUnlock = getTransitionDisclosure(state);
+
+  return {
+    always: ALWAYS_COMMANDS,
+    bootstrap: [],
+    modeSpecific,
+    transition: nextUnlock ? [nextUnlock.transitionCommand] : [],
+    nextUnlock,
+    recoveryHint: options?.recoveryHint,
+  };
+}
+
+function formatDisclosureSections(disclosure: ModeCommandDisclosure): string[] {
+  const sections: string[] = [
+    '## Always available',
+    '',
+    ...disclosure.always.map(commandLine),
+    '',
+    '## Available now',
+    '',
+    ...(disclosure.modeSpecific.length > 0 ? disclosure.modeSpecific.map(commandLine) : disclosure.bootstrap.map(commandLine)),
+  ];
+
+  if (disclosure.transition.length > 0) {
+    sections.push('', '## Transition', '', ...disclosure.transition.map(commandLine));
+  }
+
+  if (disclosure.nextUnlock) {
+    sections.push(
+      '',
+      '## Next unlock',
+      '',
+      `Unsatisfied gate: ${disclosure.nextUnlock.gate}`,
+      `Transition command: ${disclosure.nextUnlock.transitionCommand.command}`,
+      'Commands that help satisfy it:',
+      ...disclosure.nextUnlock.supportingCommands.map(commandLine),
+    );
+  }
+
+  if (disclosure.recoveryHint) {
+    sections.push('', '## Recovery', '', disclosure.recoveryHint);
+  }
+
+  return sections;
+}
 
 function accessLabel(mode: RutaMode): string {
   if (mode === 'read') return 'no AI';
@@ -383,26 +527,41 @@ Use /ruta-open-spec to add comments while viewing the spec.`,
 /** All valid topic keys, sorted alphabetically — used for tab-completion. */
 export const HELP_TOPIC_KEYS: string[] = Object.keys(HELP_TOPICS).sort();
 
-export function buildHelpText(topic: string | null | undefined): string {
+function helpTopicIndex(): string {
+  const index = HELP_TOPIC_KEYS.map((key) => {
+    const t = HELP_TOPICS[key];
+    return `- ${key.padEnd(20)} ${t.title}`;
+  }).join('\n');
+
+  return [
+    'Usage: /ruta-help <topic>',
+    '',
+    'Available topics:',
+    '',
+    index,
+    '',
+    'Examples:',
+    '  /ruta-help unity',
+    '  /ruta-help gap',
+    '  /ruta-help read',
+    '  /ruta-help probe',
+  ].join('\n');
+}
+
+export function buildHelpText(
+  state: RutaProjectState | null,
+  topic: string | null | undefined,
+  options?: { recoveryHint?: string },
+): string {
+  const disclosure = getModeCommandDisclosure(state, options);
+
   if (!topic || !topic.trim()) {
-    const index = HELP_TOPIC_KEYS.map((key) => {
-      const t = HELP_TOPICS[key];
-      return `- ${key.padEnd(20)} ${t.title}`;
-    }).join('\n');
     return [
       '# ruta help',
       '',
-      'Usage: /ruta-help <topic>',
+      helpTopicIndex(),
       '',
-      'Available topics:',
-      '',
-      index,
-      '',
-      'Examples:',
-      '  /ruta-help unity',
-      '  /ruta-help gap',
-      '  /ruta-help read',
-      '  /ruta-help probe',
+      ...formatDisclosureSections(disclosure),
     ].join('\n');
   }
 
@@ -412,12 +571,55 @@ export function buildHelpText(topic: string | null | undefined): string {
   if (!found) {
     const suggestions = HELP_TOPIC_KEYS.filter((k) => k.startsWith(normalized.slice(0, 3)));
     const hint = suggestions.length
-      ? `\nDid you mean: ${suggestions.join(', ')}?\n\nRun /ruta-help with no argument to see all topics.`
-      : '\nRun /ruta-help with no argument to see all topics.';
-    return `# ruta help\n\nUnknown topic: "${topic}"${hint}`;
+      ? `Did you mean: ${suggestions.join(', ')}?`
+      : 'Run /ruta-help with no argument to see all topics.';
+    return [
+      '# ruta help',
+      '',
+      `Unknown topic: "${topic}"`,
+      hint,
+      '',
+      ...formatDisclosureSections(disclosure),
+    ].join('\n');
   }
 
   return `# ruta help — ${found.title}\n\n${found.body}`;
+}
+
+export function buildStatusText(
+  state: RutaProjectState | null,
+  counts: { glossaryTerms: number; gaps: number; majorSections: number },
+  options?: { recoveryHint?: string },
+): string {
+  const disclosure = getModeCommandDisclosure(state, options);
+  if (!state) {
+    return [
+      '# ruta status',
+      '',
+      'No active ruta session in this workspace.',
+      '',
+      ...formatDisclosureSections(disclosure),
+    ].join('\n');
+  }
+
+  const toolbar = `[${state.current_mode}] ${accessLabel(state.current_mode)}  ·  gates: read=${state.gates.read_unlocked} glossary=${state.gates.glossary_unlocked} reimpl=${state.gates.reimplement_unlocked}`;
+  return [
+    '# ruta status',
+    '',
+    toolbar,
+    `spec: ${state.source_spec_path ?? state.spec_path}`,
+    '',
+    `- unity sentence: ${state.unity_sentence ?? '(missing)'}`,
+    ...(state.scope ? [`- scope: ${state.scope}`] : []),
+    '',
+    '## Artifacts',
+    '',
+    `- glossary terms: ${counts.glossaryTerms}`,
+    `- gaps: ${counts.gaps}`,
+    `- major sections: ${counts.majorSections}`,
+    '',
+    ...formatDisclosureSections(disclosure),
+  ].join('\n');
 }
 
 export function buildTutorialText(state: RutaProjectState | null, specTitle?: string): string {
