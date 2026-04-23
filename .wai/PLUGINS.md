@@ -5,6 +5,7 @@ Wai auto-detects and integrates with external tools:
 ## Detected in this workspace:
 - **git** — Version control (hooks: status, handoff)
 - **beads** — Issue tracking (commands: list, show, ready)
+- **openspec** — Specification management
 
 
 ## Custom plugins

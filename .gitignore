@@ -6,6 +6,8 @@ coverage/
 
 # Local ruta workspaces created at repo root during development
 ach/
+chavruta/
+spec/
 .ruta/
 contracts.md
 gaps.md
