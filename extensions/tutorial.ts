@@ -28,8 +28,12 @@ export interface ModeCommandDisclosure {
 }
 
 function tutorialUtilityCommands(mode: RutaMode): CommandDisclosureItem[] {
+  const whyPurpose =
+    mode === 'glossary' ? 'explain why help is narrow in this mode' :
+    mode === 'reimplement' ? 'explain the guardrails for this mode' :
+    'explain why AI is restricted here';
   return [
-    { command: '/ruta-why', purpose: mode === 'glossary' ? 'explain why help is narrow in this mode' : 'explain why AI is restricted here' },
+    { command: '/ruta-why', purpose: whyPurpose },
     { command: '/ruta-tutorial', purpose: 'show this guide again' },
   ];
 }
@@ -65,10 +69,9 @@ function modeTutorial(state: RutaProjectState): ModeTutorial {
   return {
     purpose: 'Surface implementation ambiguities, silences, and forced decisions without prematurely resolving them.',
     commands: [
-      { command: '/ruta-scope <ref-range>', purpose: 'optionally narrow the section range for large specs' },
+      { command: '/ruta-scope <ref-range>', purpose: 'narrow the probe scope to specific sections' },
       ...MODE_COMMANDS.reimplement,
-      { command: '/ruta-why', purpose: 'explain the guardrails for this mode' },
-      { command: '/ruta-tutorial', purpose: 'show this guide again' },
+      ...tutorialUtilityCommands('reimplement'),
     ],
     success: 'Reimplement mode is complete when gaps.md has at least one gap entry per major section in scope.',
     nextAction: state.scope
