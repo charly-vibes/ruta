@@ -1,0 +1,6 @@
+id = "same-spec-from-different-working-directories-uses-the-same-uuid"
+description = ""
+archetype = "PF"
+status = "active"
+superseded_by = ""
+authored_with = "0.1.0"

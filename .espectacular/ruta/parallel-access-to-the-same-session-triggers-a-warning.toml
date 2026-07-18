@@ -1,0 +1,6 @@
+id = "parallel-access-to-the-same-session-triggers-a-warning"
+description = ""
+archetype = "PF"
+status = "active"
+superseded_by = ""
+authored_with = "0.1.0"

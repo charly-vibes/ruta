@@ -1,0 +1,6 @@
+id = "each-terminal-registers-its-session-on-init-or-resume"
+description = ""
+archetype = "PF"
+status = "active"
+superseded_by = ""
+authored_with = "0.1.0"

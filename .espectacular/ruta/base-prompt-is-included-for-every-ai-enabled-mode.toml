@@ -1,0 +1,6 @@
+id = "base-prompt-is-included-for-every-ai-enabled-mode"
+description = ""
+archetype = "PF"
+status = "active"
+superseded_by = ""
+authored_with = "0.1.0"

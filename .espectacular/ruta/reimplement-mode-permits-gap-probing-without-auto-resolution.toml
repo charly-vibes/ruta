@@ -1,0 +1,6 @@
+id = "reimplement-mode-permits-gap-probing-without-auto-resolution"
+description = ""
+archetype = "PF"
+status = "active"
+superseded_by = ""
+authored_with = "0.1.0"
