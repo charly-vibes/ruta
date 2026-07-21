@@ -1,3 +1,7 @@
+# Validate spec-test correspondence (requires ah)
+validate:
+  ah check
+
 default:
   @just --list
 
